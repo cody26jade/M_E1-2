@@ -24409,3 +24409,72 @@ are separate subsequent steps.
 The recovered revision evidence was validated successfully.
 
 - [R05B final evidence verification](../logs/R05B_evaluation_evidence.txt)
+
+## Actual Program Execution - NEITO Criterion #1
+
+**Criterion #1: Actual application execution.**
+
+The Python application was executed four times
+in an isolated local Git clone of the tested source.
+Actual console output was captured directly from
+the running process using automated keyboard input.
+
+- Execution date: 2026-11-15T00:38:48.172926+09:00
+- Executed command: `python main.py`
+- Actual main menu input: `0`
+- Actual process exit code: `0`
+- Actual successful application runs: `4 / 4`
+- Listed questions: `20`
+- Actual gameplay and grading: PASS
+- Best score and play history: PASS
+- Restart persistence: PASS
+
+Actual main menu console output:
+
+    퀴즈 데이터 로드 완료: 20개
+
+
+    데이터 저장 완료: state.json
+
+
+    ==================================================================
+    MACHINE TOOL & VIBRATION QUIZ
+    CODYSSEY AI ALL-IN-ONE | M_E1-2
+    ==================================================================
+
+     등록 문제 : 20개
+     초급 / 중급 : 10 / 10
+     최고 점수 : 기록 없음
+     완료 게임 : 0회
+
+    ------------------------------------------------------------------
+     MAIN MENU
+
+     [1]  퀴즈 풀기 (Play)
+     [2]  문제 추가 (Add)
+     [3]  문제 목록 (List)
+     [4]  최고 점수 (Score)
+     [5]  문제 삭제 (Delete)
+     [6]  플레이 이력 (History)
+
+     [0]  프로그램 종료 (Exit)
+
+    ------------------------------------------------------------------
+
+    메뉴 선택 (0~6):
+    데이터 저장 완료: state.json
+
+
+    프로그램을 종료합니다.
+
+The following Markdown document contains the
+complete observed console output, input sequences,
+exit codes and persistence verification results.
+
+- [Complete actual execution evidence](ACTUAL_EXECUTION_EVIDENCE.md)
+- [Raw actual execution log](../logs/R08_actual_execution.txt)
+- [README actual execution evidence](../README.md)
+- [Main menu screenshot](../screenshots/03_Quiz_Main_Menu.png)
+
+The original application source and original
+runtime state were preserved.

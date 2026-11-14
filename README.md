@@ -1,5 +1,101 @@
 # Machine Tool & Vibration Quiz
 
+## Actual Program Execution - NEITO Criterion #1
+
+**Direct runtime evidence: PASS.**
+
+The following is actual console output captured
+by executing the submitted Python application.
+It is not a mockup or an expected-output example.
+
+- Execution date: 2026-11-15T00:38:48.172926+09:00
+- Python version: 3.12.10
+- Operating system: Windows
+- Tested source commit: `94dbbe77662abbb1c70f1daaf50eaac157ded41e`
+- Execution method: isolated local Git clone
+- Keyboard input method: automated standard input
+
+### Actual Main Menu Execution
+
+Executed command:
+
+    python main.py
+
+Actual keyboard input: `0` (Exit)
+
+Captured console output:
+
+    퀴즈 데이터 로드 완료: 20개
+
+
+    데이터 저장 완료: state.json
+
+
+    ==================================================================
+    MACHINE TOOL & VIBRATION QUIZ
+    CODYSSEY AI ALL-IN-ONE | M_E1-2
+    ==================================================================
+
+     등록 문제 : 20개
+     초급 / 중급 : 10 / 10
+     최고 점수 : 기록 없음
+     완료 게임 : 0회
+
+    ------------------------------------------------------------------
+     MAIN MENU
+
+     [1]  퀴즈 풀기 (Play)
+     [2]  문제 추가 (Add)
+     [3]  문제 목록 (List)
+     [4]  최고 점수 (Score)
+     [5]  문제 삭제 (Delete)
+     [6]  플레이 이력 (History)
+
+     [0]  프로그램 종료 (Exit)
+
+    ------------------------------------------------------------------
+
+    메뉴 선택 (0~6):
+    데이터 저장 완료: state.json
+
+
+    프로그램을 종료합니다.
+
+**Actual process exit code: 0**
+
+### Actual Runtime Verification
+
+| Verification | Observed result |
+|---|---|
+| Application startup and main menu | PASS |
+| Menu options 0 through 6 | PASS |
+| Quiz list | 20 questions |
+| Actual quiz gameplay and grading | PASS |
+| Best score display | PASS |
+| Play history display | PASS |
+| Application restart | PASS |
+| Persisted best score | 0.0 |
+| Persisted play history | 1 |
+| Data preserved after restart | PASS |
+| Actual application runs | 4 / 4 |
+| All process exit codes | 0 |
+
+### Complete Execution Evidence
+
+- [Actual console output for all four runs](docs/ACTUAL_EXECUTION_EVIDENCE.md)
+- [Raw actual execution log](logs/R08_actual_execution.txt)
+- [Evaluation evidence](docs/EVALUATION_EVIDENCE.md)
+- [Main menu screenshot](screenshots/03_Quiz_Main_Menu.png)
+
+The full Markdown evidence includes actual menu,
+quiz list, gameplay, score, history and restart output.
+ANSI color sequences and trailing whitespace were
+removed for readability. Runtime results were preserved.
+
+The original user state.json was not used or modified.
+
+---
+
 CODYSSEY AI ALL-IN-ONE | M_E1-2
 
 공작기계 및 진동 분석 학습용 Python 콘솔 퀴즈
