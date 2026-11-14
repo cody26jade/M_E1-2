@@ -1,0 +1,760 @@
+CODYSSEY MISSION REPORT SYSTEM
+M_E1-2 STEP03 - Quiz Dataset Creation
+Date: 2026-11-14 22:26:53
+
+01. Verify Project Environment
+
+> if ((Get-Location).Path -ne "C:\2026Codyssey_AllInOne\M_E1-2") {
+        throw "Incorrect project directory."
+    }
+
+    $required = @(
+        ".git",
+        ".gitignore",
+        ".gitattributes",
+        "README.md",
+        "data",
+        "tests",
+        "logs",
+        "screenshots",
+        "logs/01_development_environment.txt"
+    )
+
+    foreach ($item in $required) {
+
+        if (-not (Test-Path -LiteralPath $item)) {
+            throw "Missing required item: $item"
+        }
+
+        "READY: $item"
+    }
+
+    "PASS: Project environment verified"
+READY: .git
+READY: .gitignore
+READY: .gitattributes
+READY: README.md
+READY: data
+READY: tests
+READY: logs
+READY: screenshots
+READY: logs/01_development_environment.txt
+PASS: Project environment verified
+Failed: False
+
+02. Save STEP02 Execution Evidence
+
+> $source = Get-ChildItem "C:\2026Codyssey_AllInOne\_Common\logs" -File |
+        Where-Object {
+            $_.Name -like "*M_E1-2*STEP02*Project*Structure*"
+        } |
+        Sort-Object LastWriteTime -Descending |
+        Select-Object -First 1
+
+    if (-not $source) {
+        throw "STEP02 execution log not found."
+    }
+
+    $content = Get-Content -LiteralPath $source.FullName -Raw -Encoding UTF8
+
+    if ($content -match '(?m)^Failed:\s*True\s*$') {
+        throw "STEP02 contains failed steps."
+    }
+
+    $results = [regex]::Matches(
+        $content,
+        '(?m)^Failed:\s*False\s*$'
+    )
+
+    if ($results.Count -ne 10) {
+        throw "Expected ten successful STEP02 results."
+    }
+
+    $content = $content -replace '(?i)([A-Z]:\\Users\\)[^\\\r\n]+(?=\\)', '${1}<USER>'
+
+    $target = Join-Path (Get-Location).Path "logs\02_project_structure_git.txt"
+
+    $utf8 = New-Object System.Text.UTF8Encoding($false)
+
+    [System.IO.File]::WriteAllText(
+        $target,
+        $content,
+        $utf8
+    )
+
+    "PASS: Actual STEP02 execution evidence saved"
+PASS: Actual STEP02 execution evidence saved
+Failed: False
+
+03. Create Default Quiz Dataset
+
+> $path = Join-Path (Get-Location).Path "data\default_quizzes.json"
+
+    if (Test-Path -LiteralPath $path) {
+        throw "Quiz dataset already exists. Review required."
+    }
+
+    $content = @'
+[
+    {
+        "id": 1,
+        "difficulty": "beginner",
+        "category": "공작기계",
+        "question": "CNC의 의미는 무엇인가?",
+        "choices": [
+            "Computer Numerical Control",
+            "Central Network Computer",
+            "Control Number Calculation",
+            "Computer Noise Control"
+        ],
+        "answer": 1,
+        "hint": "컴퓨터를 이용한 수치 제어를 의미합니다.",
+        "explanation": "CNC는 Computer Numerical Control의 약자로 컴퓨터 수치 제어를 의미합니다."
+    },
+    {
+        "id": 2,
+        "difficulty": "beginner",
+        "category": "공작기계",
+        "question": "머시닝센터 주축(Spindle)의 주요 역할은 무엇인가?",
+        "choices": [
+            "절삭유 저장",
+            "공구 회전 및 절삭 동력 전달",
+            "공작물 세척",
+            "기계 외부 조명 제어"
+        ],
+        "answer": 2,
+        "hint": "절삭공구를 회전시키는 장치입니다.",
+        "explanation": "머시닝센터 주축은 공구를 회전시키고 절삭에 필요한 동력을 전달합니다."
+    },
+    {
+        "id": 3,
+        "difficulty": "beginner",
+        "category": "공작기계",
+        "question": "ATC의 주요 기능은 무엇인가?",
+        "choices": [
+            "주축 온도 측정",
+            "절삭유 냉각",
+            "자동 공구 교환",
+            "진동 데이터 저장"
+        ],
+        "answer": 3,
+        "hint": "Automatic Tool Changer의 약자입니다.",
+        "explanation": "ATC는 가공 프로그램에 따라 공구를 자동으로 교환하는 장치입니다."
+    },
+    {
+        "id": 4,
+        "difficulty": "beginner",
+        "category": "공작기계",
+        "question": "볼스크루(Ball Screw)의 주요 역할은 무엇인가?",
+        "choices": [
+            "전기에너지를 열에너지로 변환",
+            "진동 신호 증폭",
+            "공구 마모 측정",
+            "회전운동을 직선운동으로 변환"
+        ],
+        "answer": 4,
+        "hint": "이송축의 직선 이동에 사용됩니다.",
+        "explanation": "볼스크루는 모터의 회전운동을 이송축의 직선운동으로 변환합니다."
+    },
+    {
+        "id": 5,
+        "difficulty": "beginner",
+        "category": "진동 기초",
+        "question": "진동 가속도의 SI 단위는 무엇인가?",
+        "choices": [
+            "m/s²",
+            "mm",
+            "Hz",
+            "N"
+        ],
+        "answer": 1,
+        "hint": "속도를 시간으로 미분한 물리량입니다.",
+        "explanation": "가속도는 단위 시간당 속도 변화량으로 SI 단위는 m/s²입니다."
+    },
+    {
+        "id": 6,
+        "difficulty": "beginner",
+        "category": "진동 기초",
+        "question": "주파수의 단위는 무엇인가?",
+        "choices": [
+            "W",
+            "Hz",
+            "Pa",
+            "kg"
+        ],
+        "answer": 2,
+        "hint": "1초 동안 반복되는 횟수를 나타냅니다.",
+        "explanation": "주파수의 단위는 헤르츠(Hz)이며 1 Hz는 초당 1회 반복을 의미합니다."
+    },
+    {
+        "id": 7,
+        "difficulty": "beginner",
+        "category": "진동 기초",
+        "question": "RMS가 의미하는 것은 무엇인가?",
+        "choices": [
+            "최댓값",
+            "최솟값",
+            "제곱평균제곱근",
+            "주파수의 합계"
+        ],
+        "answer": 3,
+        "hint": "Root Mean Square의 약자입니다.",
+        "explanation": "RMS는 신호를 제곱하고 평균한 후 제곱근을 취한 값으로 진동 크기의 대표 지표입니다."
+    },
+    {
+        "id": 8,
+        "difficulty": "beginner",
+        "category": "FFT 분석",
+        "question": "FFT를 이용하는 주요 목적은 무엇인가?",
+        "choices": [
+            "센서의 무게 측정",
+            "기계의 온도 감소",
+            "데이터 파일 삭제",
+            "시간영역 신호의 주파수 성분 분석"
+        ],
+        "answer": 4,
+        "hint": "복합 진동 신호에 포함된 주파수를 분석합니다.",
+        "explanation": "FFT는 이산 푸리에 변환을 효율적으로 계산하여 시간영역 신호의 주파수 성분을 분석합니다."
+    },
+    {
+        "id": 9,
+        "difficulty": "beginner",
+        "category": "회전체 진동",
+        "question": "주축이 3000 rpm으로 회전할 때 회전주파수는 얼마인가?",
+        "choices": [
+            "50 Hz",
+            "30 Hz",
+            "300 Hz",
+            "3000 Hz"
+        ],
+        "answer": 1,
+        "hint": "회전수를 60으로 나누어 계산합니다.",
+        "explanation": "회전주파수는 rpm을 60으로 나눈 값입니다. 3000/60 = 50 Hz입니다."
+    },
+    {
+        "id": 10,
+        "difficulty": "beginner",
+        "category": "진동 기초",
+        "question": "공진(Resonance)이 발생하기 쉬운 조건은 무엇인가?",
+        "choices": [
+            "가진력이 완전히 없는 경우",
+            "가진주파수가 고유진동수에 가까운 경우",
+            "회전수가 항상 0인 경우",
+            "센서의 측정 단위가 변경된 경우"
+        ],
+        "answer": 2,
+        "hint": "외부에서 가해지는 주파수와 구조물의 고유 특성을 비교합니다.",
+        "explanation": "가진주파수가 고유진동수에 가까워지면 감쇠 조건에 따라 진동 응답이 크게 증가할 수 있습니다."
+    },
+    {
+        "id": 11,
+        "difficulty": "intermediate",
+        "category": "신호 처리",
+        "question": "샘플링 주파수가 25.6 kHz일 때 1초 동안 취득하는 샘플 수는 얼마인가?",
+        "choices": [
+            "256개",
+            "2560개",
+            "25600개",
+            "256000개"
+        ],
+        "answer": 3,
+        "hint": "kHz를 Hz로 변환합니다.",
+        "explanation": "25.6 kHz는 초당 25600개의 샘플을 취득한다는 의미입니다."
+    },
+    {
+        "id": 12,
+        "difficulty": "intermediate",
+        "category": "신호 처리",
+        "question": "샘플링 주파수가 25.6 kHz일 때 나이퀴스트 주파수는 얼마인가?",
+        "choices": [
+            "6.4 kHz",
+            "25.6 kHz",
+            "51.2 kHz",
+            "12.8 kHz"
+        ],
+        "answer": 4,
+        "hint": "샘플링 주파수의 절반입니다.",
+        "explanation": "나이퀴스트 주파수는 Fs/2이므로 25.6/2 = 12.8 kHz입니다."
+    },
+    {
+        "id": 13,
+        "difficulty": "intermediate",
+        "category": "FFT 분석",
+        "question": "10초 동안 측정한 신호 전체를 FFT할 때 기본 주파수 빈 간격은 얼마인가?",
+        "choices": [
+            "0.1 Hz",
+            "1 Hz",
+            "10 Hz",
+            "100 Hz"
+        ],
+        "answer": 1,
+        "hint": "제로 패딩이 없다면 주파수 빈 간격은 측정시간의 역수입니다.",
+        "explanation": "제로 패딩 없이 전체 신호를 FFT하면 주파수 빈 간격은 1/T = 0.1 Hz입니다. 실제 분리 성능은 윈도우 등의 영향도 받습니다."
+    },
+    {
+        "id": 14,
+        "difficulty": "intermediate",
+        "category": "회전체 진동",
+        "question": "회전체 불평형에서 대표적으로 관찰되는 진동 성분은 무엇인가?",
+        "choices": [
+            "항상 0 Hz",
+            "회전주파수 1X",
+            "항상 1000 Hz",
+            "샘플링 주파수"
+        ],
+        "answer": 2,
+        "hint": "회전체가 한 바퀴 회전할 때 반복되는 힘을 생각합니다.",
+        "explanation": "불평형은 일반적으로 회전주파수 1X 성분을 발생시키지만 1X 성분만으로 불평형을 확정할 수는 없습니다."
+    },
+    {
+        "id": 15,
+        "difficulty": "intermediate",
+        "category": "베어링 진단",
+        "question": "BPFO는 어떤 베어링 결함과 관련된 주파수인가?",
+        "choices": [
+            "내륜 결함",
+            "전동체 결함",
+            "외륜 결함",
+            "윤활유 온도"
+        ],
+        "answer": 3,
+        "hint": "Outer Race에 해당합니다.",
+        "explanation": "BPFO는 Ball Pass Frequency Outer Race로 외륜 결함 관련 특성주파수입니다."
+    },
+    {
+        "id": 16,
+        "difficulty": "intermediate",
+        "category": "베어링 진단",
+        "question": "BPFI는 어떤 베어링 결함과 관련된 주파수인가?",
+        "choices": [
+            "외륜 결함",
+            "케이지 결함",
+            "전동체 결함",
+            "내륜 결함"
+        ],
+        "answer": 4,
+        "hint": "Inner Race에 해당합니다.",
+        "explanation": "BPFI는 Ball Pass Frequency Inner Race로 내륜 결함 관련 특성주파수입니다."
+    },
+    {
+        "id": 17,
+        "difficulty": "intermediate",
+        "category": "베어링 진단",
+        "question": "포락선 분석(Envelope Analysis)의 주요 활용 목적은 무엇인가?",
+        "choices": [
+            "충격에 의해 변조된 신호에서 반복 결함 성분 검출",
+            "공작물 치수 측정",
+            "주축 회전수 강제 감소",
+            "절삭유 점도 측정"
+        ],
+        "answer": 1,
+        "hint": "고주파 공진을 유발하는 반복 충격 신호에 활용됩니다.",
+        "explanation": "포락선 분석은 고주파 충격 응답에 포함된 반복적인 변조 성분을 추출하여 베어링 결함 진단 등에 활용합니다."
+    },
+    {
+        "id": 18,
+        "difficulty": "intermediate",
+        "category": "FFT 분석",
+        "question": "주파수 f에서 가속도 진폭 A를 속도 진폭 V로 변환하는 식은 무엇인가?",
+        "choices": [
+            "V = A × 2πf",
+            "V = A / (2πf)",
+            "V = A + f",
+            "V = A × f²"
+        ],
+        "answer": 2,
+        "hint": "가속도를 적분하면 속도가 됩니다.",
+        "explanation": "0 Hz를 제외한 주파수 성분에서 동일한 진폭 정의를 사용하면 V = A/(2πf)입니다."
+    },
+    {
+        "id": 19,
+        "difficulty": "intermediate",
+        "category": "진동 계측",
+        "question": "3축 가속도 센서를 사용하는 주요 장점은 무엇인가?",
+        "choices": [
+            "샘플링이 필요하지 않음",
+            "항상 모든 진동을 제거함",
+            "서로 직교하는 세 방향의 진동 측정",
+            "온도 측정만 가능함"
+        ],
+        "answer": 3,
+        "hint": "X축, Y축, Z축 방향을 생각합니다.",
+        "explanation": "3축 가속도 센서는 세 방향의 진동을 측정하여 방향별 진동 특성을 비교할 수 있습니다."
+    },
+    {
+        "id": 20,
+        "difficulty": "intermediate",
+        "category": "베어링 진단",
+        "question": "측정 피크와 베어링 이론 결함주파수가 일치할 때 가장 적절한 판단은 무엇인가?",
+        "choices": [
+            "무조건 베어링 불량으로 확정한다.",
+            "측정 결과를 삭제한다.",
+            "주파수가 일치하면 정상으로 확정한다.",
+            "결함 가능성을 검토하고 추가 증거를 확인한다."
+        ],
+        "answer": 4,
+        "hint": "주파수 일치는 결함 가능성을 판단하는 근거 중 하나입니다.",
+        "explanation": "결함주파수 일치만으로 불량을 확정할 수 없습니다. 진폭, 고조파, 사이드밴드, 운전조건 및 반복 측정 결과를 함께 검토해야 합니다."
+    }
+]
+'@
+
+    $utf8 = New-Object System.Text.UTF8Encoding($false)
+
+    [System.IO.File]::WriteAllText(
+        $path,
+        $content.TrimEnd() + "`n",
+        $utf8
+    )
+
+    Get-Item -LiteralPath $path |
+        Select-Object Name, Length
+
+    "PASS: Default quiz dataset created"
+
+Name                 Length
+----                 ------
+default_quizzes.json  11863
+PASS: Default quiz dataset created
+Failed: False
+
+04. Validate JSON Syntax
+
+> python -c "import json; from pathlib import Path; data=json.loads(Path('data/default_quizzes.json').read_text(encoding='utf-8')); print('JSON TYPE:', type(data).__name__); print('QUESTION COUNT:', len(data)); assert isinstance(data,list); assert len(data)==20; print('PASS: JSON syntax and question count verified')"
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "JSON syntax validation failed."
+    }
+JSON TYPE: list
+QUESTION COUNT: 20
+PASS: JSON syntax and question count verified
+Failed: False
+
+05. Validate Quiz Schema
+
+> $validation = @'
+import json
+from pathlib import Path
+from collections import Counter
+
+path = Path("data/default_quizzes.json")
+quizzes = json.loads(path.read_text(encoding="utf-8"))
+
+required = {
+    "id",
+    "difficulty",
+    "category",
+    "question",
+    "choices",
+    "answer",
+    "hint",
+    "explanation"
+}
+
+ids = set()
+questions = set()
+
+for quiz in quizzes:
+    assert set(quiz) == required, "Invalid schema"
+    assert type(quiz["id"]) is int
+    assert quiz["id"] not in ids, "Duplicate ID"
+    assert quiz["question"] not in questions, "Duplicate question"
+
+    assert quiz["difficulty"] in (
+        "beginner",
+        "intermediate"
+    )
+
+    assert isinstance(quiz["choices"], list)
+    assert len(quiz["choices"]) == 4
+    assert len(set(quiz["choices"])) == 4
+
+    assert type(quiz["answer"]) is int
+    assert 1 <= quiz["answer"] <= 4
+
+    for field in (
+        "category",
+        "question",
+        "hint",
+        "explanation"
+    ):
+        assert isinstance(quiz[field], str)
+        assert quiz[field].strip()
+
+    for choice in quiz["choices"]:
+        assert isinstance(choice, str)
+        assert choice.strip()
+
+    ids.add(quiz["id"])
+    questions.add(quiz["question"])
+
+    print(
+        f"PASS: Question {quiz['id']:02d} | "
+        f"{quiz['difficulty']} | "
+        f"Answer {quiz['answer']}"
+    )
+
+assert ids == set(range(1, 21))
+
+levels = Counter(
+    quiz["difficulty"] for quiz in quizzes
+)
+
+answers = Counter(
+    quiz["answer"] for quiz in quizzes
+)
+
+assert levels["beginner"] == 10
+assert levels["intermediate"] == 10
+
+print()
+print("TOTAL QUESTIONS:", len(quizzes))
+print("BEGINNER:", levels["beginner"])
+print("INTERMEDIATE:", levels["intermediate"])
+print("ANSWER DISTRIBUTION:", dict(sorted(answers.items())))
+print("PASS: ALL QUIZ DATA VALIDATION TESTS COMPLETED")
+'@
+
+    $validation | python -
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Quiz schema validation failed."
+    }
+PASS: Question 01 | beginner | Answer 1
+PASS: Question 02 | beginner | Answer 2
+PASS: Question 03 | beginner | Answer 3
+PASS: Question 04 | beginner | Answer 4
+PASS: Question 05 | beginner | Answer 1
+PASS: Question 06 | beginner | Answer 2
+PASS: Question 07 | beginner | Answer 3
+PASS: Question 08 | beginner | Answer 4
+PASS: Question 09 | beginner | Answer 1
+PASS: Question 10 | beginner | Answer 2
+PASS: Question 11 | intermediate | Answer 3
+PASS: Question 12 | intermediate | Answer 4
+PASS: Question 13 | intermediate | Answer 1
+PASS: Question 14 | intermediate | Answer 2
+PASS: Question 15 | intermediate | Answer 3
+PASS: Question 16 | intermediate | Answer 4
+PASS: Question 17 | intermediate | Answer 1
+PASS: Question 18 | intermediate | Answer 2
+PASS: Question 19 | intermediate | Answer 3
+PASS: Question 20 | intermediate | Answer 4
+
+TOTAL QUESTIONS: 20
+BEGINNER: 10
+INTERMEDIATE: 10
+ANSWER DISTRIBUTION: {1: 5, 2: 5, 3: 5, 4: 5}
+PASS: ALL QUIZ DATA VALIDATION TESTS COMPLETED
+Failed: False
+
+06. Verify UTF-8 Encoding
+
+> $path = (Resolve-Path ".\data\default_quizzes.json").Path
+
+    $bytes = [System.IO.File]::ReadAllBytes($path)
+
+    $strictUtf8 = New-Object System.Text.UTF8Encoding($false, $true)
+
+    $text = $strictUtf8.GetString($bytes)
+
+    if ($bytes.Length -ge 3 -and
+        $bytes[0] -eq 239 -and
+        $bytes[1] -eq 187 -and
+        $bytes[2] -eq 191) {
+
+        throw "Unexpected UTF-8 BOM."
+    }
+
+    if ($text -notmatch '[가-힣]') {
+        throw "Korean quiz text not detected."
+    }
+
+    "FILE SIZE: $($bytes.Length) bytes"
+    "ENCODING: UTF-8 without BOM"
+
+    "PASS: Korean text and UTF-8 encoding verified"
+FILE SIZE: 11863 bytes
+ENCODING: UTF-8 without BOM
+PASS: Korean text and UTF-8 encoding verified
+Failed: False
+
+07. Verify Git Identity and Repository
+
+> $root = git rev-parse --show-toplevel
+
+    if ($LASTEXITCODE -ne 0 -or
+        $root -ne "C:/2026Codyssey_AllInOne/M_E1-2") {
+
+        throw "Unexpected Git repository."
+    }
+
+    $branch = git symbolic-ref --short HEAD
+
+    if ($LASTEXITCODE -ne 0 -or $branch -ne "main") {
+        throw "Unexpected Git branch."
+    }
+
+    $email = git var GIT_AUTHOR_IDENT
+
+    if ($LASTEXITCODE -ne 0 -or
+        $email -notmatch '<\d+\+cody26jade@users\.noreply\.github\.com>') {
+
+        throw "Git author email privacy verification failed."
+    }
+
+    $committer = git var GIT_COMMITTER_IDENT
+
+    if ($LASTEXITCODE -ne 0 -or
+        $committer -notmatch '<\d+\+cody26jade@users\.noreply\.github\.com>') {
+
+        throw "Git committer email privacy verification failed."
+    }
+
+    "BRANCH: $branch"
+    "PASS: Git repository verified"
+    "PASS: Author and committer email privacy verified"
+BRANCH: main
+PASS: Git repository verified
+PASS: Author and committer email privacy verified
+Failed: False
+
+08. Create Initial Git Commit
+
+> $required = @(
+        ".gitignore",
+        ".gitattributes",
+        "README.md",
+        "logs/01_development_environment.txt",
+        "logs/02_project_structure_git.txt",
+        "data/default_quizzes.json",
+        "screenshots/01_Development_Environment.png",
+        "screenshots/02_Git_Configuration.png"
+    )
+
+    foreach ($file in $required) {
+
+        if (-not (Test-Path -LiteralPath $file -PathType Leaf)) {
+            throw "Missing required file: $file"
+        }
+    }
+
+    git rev-parse --verify HEAD 2>$null
+
+    if ($LASTEXITCODE -eq 0) {
+        throw "Initial commit already exists. Review required."
+    }
+
+    python -c "import json; from pathlib import Path; q=json.loads(Path('data/default_quizzes.json').read_text(encoding='utf-8')); assert len(q)==20; assert len({x['id'] for x in q})==20; assert all(len(x['choices'])==4 and 1<=x['answer']<=4 for x in q); print('PASS: Pre-commit dataset check')"
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Pre-commit dataset check failed."
+    }
+
+    foreach ($file in $required) {
+
+        if ($file -notlike "*.png") {
+
+            $text = Get-Content -LiteralPath $file -Raw -Encoding UTF8
+
+            if ($text -match 'github_pat_[A-Za-z0-9_]+|gh[pousr]_[A-Za-z0-9]+|sk-[A-Za-z0-9_-]{15,}|-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----') {
+
+                throw "Sensitive pattern detected in $file"
+            }
+        }
+    }
+
+    git add -- $required
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Git add failed."
+    }
+
+    $staged = @(git diff --cached --name-only)
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Staged file verification failed."
+    }
+
+    $difference = @(
+        Compare-Object `
+            -ReferenceObject $required `
+            -DifferenceObject $staged
+    )
+
+    if ($difference.Count -gt 0) {
+        throw "Unexpected staged file list."
+    }
+
+    git diff --cached --stat
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Git staged summary failed."
+    }
+
+    git commit -m "Initialize quiz project and add 20 default questions"
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Initial Git commit failed."
+    }
+
+    "PASS: Initial Git commit created"
+PASS: Pre-commit dataset check
+git : warning: in the working copy of 'logs/01_development_environment.txt', CRLF will be replaced by LF the next time Git touches it
+위치 줄:616 문자:5
++     git add -- $required
++     ~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (warning: in the... Git touches it:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+warning: in the working copy of 'logs/02_project_structure_git.txt', CRLF will be replaced by LF the next time Git touches it
+ .gitattributes                             |  10 +
+ .gitignore                                 |  25 ++
+ README.md                                  |  33 ++
+ data/default_quizzes.json                  | 302 +++++++++++++++++
+ logs/01_development_environment.txt        | 146 +++++++++
+ logs/02_project_structure_git.txt          | 510 +++++++++++++++++++++++++++++
+ screenshots/01_Development_Environment.png | Bin 0 -> 89978 bytes
+ screenshots/02_Git_Configuration.png       | Bin 0 -> 16977 bytes
+ 8 files changed, 1026 insertions(+)
+[main (root-commit) f161dea] Initialize quiz project and add 20 default questions
+ 8 files changed, 1026 insertions(+)
+ create mode 100644 .gitattributes
+ create mode 100644 .gitignore
+ create mode 100644 README.md
+ create mode 100644 data/default_quizzes.json
+ create mode 100644 logs/01_development_environment.txt
+ create mode 100644 logs/02_project_structure_git.txt
+ create mode 100644 screenshots/01_Development_Environment.png
+ create mode 100644 screenshots/02_Git_Configuration.png
+PASS: Initial Git commit created
+Failed: False
+
+09. Verify Git Commit and Status
+
+> git log -1 --oneline
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Git commit verification failed."
+    }
+
+    git status --short --branch
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Git status failed."
+    }
+
+    $status = @(git status --porcelain)
+
+    if ($LASTEXITCODE -ne 0 -or $status.Count -gt 0) {
+        throw "Working tree is not clean."
+    }
+
+    "PASS: Working tree is clean"
+    "PASS: STEP03 completed"
+f161dea Initialize quiz project and add 20 default questions
+## main
+PASS: Working tree is clean
+PASS: STEP03 completed
+Failed: False
+
