@@ -1,0 +1,510 @@
+CODYSSEY MISSION REPORT SYSTEM
+M_E1-2 STEP02 - Project Structure and Git Initialization
+Date: 2026-11-14 22:20:22
+
+01. Verify Project Directory
+
+> if ((Get-Location).Path -ne "C:\2026Codyssey_AllInOne\M_E1-2") {
+        throw "Incorrect project directory."
+    }
+
+    Get-Location
+
+    "PASS: Project directory verified"
+
+Path                           
+----                           
+C:\2026Codyssey_AllInOne\M_E1-2
+PASS: Project directory verified
+Failed: False
+
+02. Create Project Directories
+
+> $folders = @(
+        "data",
+        "tests",
+        "logs",
+        "screenshots"
+    )
+
+    foreach ($folder in $folders) {
+
+        New-Item -ItemType Directory -Path $folder -Force -ErrorAction Stop |
+            Out-Null
+
+        "READY: $folder"
+    }
+
+    "PASS: Project directories ready"
+READY: data
+READY: tests
+READY: logs
+READY: screenshots
+PASS: Project directories ready
+Failed: False
+
+03. Save STEP01 Execution Evidence
+
+> $source = Get-ChildItem "C:\2026Codyssey_AllInOne\_Common\logs" -File |
+        Where-Object {
+            $_.Name -like "*M_E1-2*STEP01*Development*Environment*"
+        } |
+        Sort-Object LastWriteTime -Descending |
+        Select-Object -First 1
+
+    if (-not $source) {
+        throw "STEP01 execution log not found."
+    }
+
+    $content = Get-Content -LiteralPath $source.FullName -Raw -Encoding UTF8
+
+    if ($content -match '(?m)^Failed:\s*True\s*$') {
+        throw "STEP01 contains failed steps."
+    }
+
+    $results = [regex]::Matches(
+        $content,
+        '(?m)^Failed:\s*False\s*$'
+    )
+
+    if ($results.Count -ne 9) {
+        throw "Expected nine successful STEP01 results."
+    }
+
+    $content = $content -replace '(?i)([A-Z]:\\Users\\)[^\\\r\n]+(?=\\)', '${1}<USER>'
+
+    $target = Join-Path (Get-Location).Path "logs\01_development_environment.txt"
+
+    $utf8 = New-Object System.Text.UTF8Encoding($false)
+
+    [System.IO.File]::WriteAllText(
+        $target,
+        $content,
+        $utf8
+    )
+
+    Get-Item -LiteralPath $target |
+        Select-Object Name, Length
+
+    "PASS: Actual STEP01 execution evidence saved"
+
+Name                           Length
+----                           ------
+01_development_environment.txt   3210
+PASS: Actual STEP01 execution evidence saved
+Failed: False
+
+04. Create Git Ignore Configuration
+
+> $path = Join-Path (Get-Location).Path ".gitignore"
+
+    $content = @'
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+.venv/
+venv/
+
+# Local environment variables
+.env
+.env.*
+
+# Runtime user data
+state.json
+state.json.tmp
+state.json.corrupt-*
+
+# IDE and operating system
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Test artifacts
+.coverage
+htmlcov/
+'@
+
+    if (Test-Path -LiteralPath $path) {
+
+        $existing = Get-Content -LiteralPath $path -Raw -Encoding UTF8
+
+        if (($existing -replace "`r`n", "`n").TrimEnd() -ne
+            ($content -replace "`r`n", "`n").TrimEnd()) {
+
+            throw "Existing .gitignore differs. Review required."
+        }
+
+        "PASS: Existing .gitignore preserved"
+    }
+    else {
+
+        $utf8 = New-Object System.Text.UTF8Encoding($false)
+
+        [System.IO.File]::WriteAllText(
+            $path,
+            $content.TrimEnd() + "`n",
+            $utf8
+        )
+
+        "PASS: Git ignore configuration created"
+    }
+
+    Get-Content -LiteralPath $path
+PASS: Git ignore configuration created
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+.venv/
+venv/
+
+# Local environment variables
+.env
+.env.*
+
+# Runtime user data
+state.json
+state.json.tmp
+state.json.corrupt-*
+
+# IDE and operating system
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Test artifacts
+.coverage
+htmlcov/
+Failed: False
+
+05. Create Git Attributes
+
+> $path = Join-Path (Get-Location).Path ".gitattributes"
+
+    $content = @'
+* text=auto
+
+*.py text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+.gitattributes text eol=lf
+.gitignore text eol=lf
+
+*.png binary
+'@
+
+    if (Test-Path -LiteralPath $path) {
+
+        $existing = Get-Content -LiteralPath $path -Raw -Encoding UTF8
+
+        if (($existing -replace "`r`n", "`n").TrimEnd() -ne
+            ($content -replace "`r`n", "`n").TrimEnd()) {
+
+            throw "Existing .gitattributes differs. Review required."
+        }
+
+        "PASS: Existing .gitattributes preserved"
+    }
+    else {
+
+        $utf8 = New-Object System.Text.UTF8Encoding($false)
+
+        [System.IO.File]::WriteAllText(
+            $path,
+            $content.TrimEnd() + "`n",
+            $utf8
+        )
+
+        "PASS: Git attributes created"
+    }
+
+    Get-Content -LiteralPath $path
+PASS: Git attributes created
+* text=auto
+
+*.py text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+.gitattributes text eol=lf
+.gitignore text eol=lf
+
+*.png binary
+Failed: False
+
+06. Create Initial README
+
+> $path = Join-Path (Get-Location).Path "README.md"
+
+    $content = @'
+# M_E1-2
+
+## Machine Tool and Vibration Analysis Quiz
+
+CODYSSEY AI ALL-IN-ONE Python Quiz Project
+
+## Project Overview
+
+A Python console-based quiz application for learning
+machine tools and vibration analysis.
+
+## Development Plan
+
+- Python 3.10 or later
+- Python standard library only
+- 20 default multiple-choice questions
+- Beginner and intermediate difficulty
+- Quiz and QuizGame classes
+- JSON-based data persistence
+- Best score and play history
+- Random questions and hints
+- Automated tests
+
+## Development Status
+
+Project initialization in progress.
+
+## Execution Evidence
+
+- [STEP01 - Development Environment](logs/01_development_environment.txt)
+
+Additional features and actual execution evidence
+will be documented during development.
+'@
+
+    if (Test-Path -LiteralPath $path) {
+
+        $existing = Get-Content -LiteralPath $path -Raw -Encoding UTF8
+
+        if (($existing -replace "`r`n", "`n").TrimEnd() -ne
+            ($content -replace "`r`n", "`n").TrimEnd()) {
+
+            throw "Existing README differs. Review required."
+        }
+
+        "PASS: Existing README preserved"
+    }
+    else {
+
+        $utf8 = New-Object System.Text.UTF8Encoding($false)
+
+        [System.IO.File]::WriteAllText(
+            $path,
+            $content.TrimEnd() + "`n",
+            $utf8
+        )
+
+        "PASS: Initial README created"
+    }
+
+    Get-Content -LiteralPath $path
+PASS: Initial README created
+# M_E1-2
+
+## Machine Tool and Vibration Analysis Quiz
+
+CODYSSEY AI ALL-IN-ONE Python Quiz Project
+
+## Project Overview
+
+A Python console-based quiz application for learning
+machine tools and vibration analysis.
+
+## Development Plan
+
+- Python 3.10 or later
+- Python standard library only
+- 20 default multiple-choice questions
+- Beginner and intermediate difficulty
+- Quiz and QuizGame classes
+- JSON-based data persistence
+- Best score and play history
+- Random questions and hints
+- Automated tests
+
+## Development Status
+
+Project initialization in progress.
+
+## Execution Evidence
+
+- [STEP01 - Development Environment](logs/01_development_environment.txt)
+
+Additional features and actual execution evidence
+will be documented during development.
+Failed: False
+
+07. Initialize Git Repository
+
+> if (Test-Path ".\.git") {
+
+        "PASS: Existing Git repository preserved"
+    }
+    else {
+
+        git init -b main
+
+        if ($LASTEXITCODE -ne 0) {
+            throw "Git initialization failed."
+        }
+    }
+
+    $root = git rev-parse --show-toplevel
+
+    if ($LASTEXITCODE -ne 0 -or
+        $root -ne "C:/2026Codyssey_AllInOne/M_E1-2") {
+
+        throw "Unexpected Git repository root."
+    }
+
+    $branch = git symbolic-ref --short HEAD
+
+    if ($LASTEXITCODE -ne 0 -or $branch -ne "main") {
+        throw "Unexpected Git branch."
+    }
+
+    "BRANCH: $branch"
+
+    "PASS: Git repository initialized"
+Initialized empty Git repository in C:/2026Codyssey_AllInOne/M_E1-2/.git/
+BRANCH: main
+PASS: Git repository initialized
+Failed: False
+
+08. Configure Local Git Identity
+
+> if (-not (Test-Path ".\.git")) {
+        throw "Git repository not initialized."
+    }
+
+    $root = git rev-parse --show-toplevel
+
+    if ($LASTEXITCODE -ne 0 -or
+        $root -ne "C:/2026Codyssey_AllInOne/M_E1-2") {
+
+        throw "Unexpected Git repository root."
+    }
+
+    $email = git -C "C:\2026Codyssey_AllInOne\M_E1-1" config --local user.email
+
+    if ($LASTEXITCODE -ne 0 -or
+        $email -notmatch '^\d+\+cody26jade@users\.noreply\.github\.com$') {
+
+        throw "Verified GitHub noreply email not found."
+    }
+
+    git config --local user.name "cody26jade"
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Git username configuration failed."
+    }
+
+    git config --local user.email $email
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Git email configuration failed."
+    }
+
+    git config --local credential.username "cody26jade"
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Git credential username configuration failed."
+    }
+
+    git config --local credential.useHttpPath true
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Git credential configuration failed."
+    }
+
+    $name = git config --local user.name
+
+    if ($LASTEXITCODE -ne 0 -or $name -ne "cody26jade") {
+        throw "Git username verification failed."
+    }
+
+    $configuredEmail = git config --local user.email
+
+    if ($LASTEXITCODE -ne 0 -or $configuredEmail -ne $email) {
+        throw "Git email verification failed."
+    }
+
+    "GIT USER: $name"
+    "EMAIL TYPE: GitHub noreply"
+
+    "PASS: Repository-local Git identity configured"
+    "PASS: GitHub noreply email verified"
+    "PASS: Repository-specific credentials configured"
+GIT USER: cody26jade
+EMAIL TYPE: GitHub noreply
+PASS: Repository-local Git identity configured
+PASS: GitHub noreply email verified
+PASS: Repository-specific credentials configured
+Failed: False
+
+09. Verify Git Ignore Rules
+
+> git check-ignore --no-index state.json
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Runtime data ignore rule failed."
+    }
+
+    git check-ignore --no-index .env
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Environment file ignore rule failed."
+    }
+
+    git check-ignore --no-index __pycache__/quiz.pyc
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Python cache ignore rule failed."
+    }
+
+    "PASS: Git ignore rules verified"
+state.json
+.env
+__pycache__/quiz.pyc
+PASS: Git ignore rules verified
+Failed: False
+
+10. Verify Project Structure
+
+> Get-ChildItem -Force |
+        Select-Object Mode, Name, Length |
+        Format-Table -AutoSize
+
+    git status --short --branch
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Git status failed."
+    }
+
+    "PASS: Initial project structure verified"
+
+Mode   Name           Length
+----   ----           ------
+d--h-- .git                 
+d----- data                 
+d----- logs                 
+d----- screenshots          
+d----- tests                
+-a---- .gitattributes 148   
+-a---- .gitignore     280   
+-a---- README.md      748   
+
+
+## No commits yet on main
+?? .gitattributes
+?? .gitignore
+?? README.md
+?? logs/
+?? screenshots/
+PASS: Initial project structure verified
+Failed: False
+
