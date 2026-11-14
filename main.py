@@ -208,7 +208,7 @@ def show_question(game):
     print(
         ui.paint(
             quiz.question,
-            "blue",
+            "purple",
             True,
         )
     )
