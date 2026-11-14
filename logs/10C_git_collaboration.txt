@@ -1,0 +1,470 @@
+CODYSSEY MISSION REPORT SYSTEM
+M_E1-2 STEP10C - Git Collaboration Practice
+Date: 2026-11-14 23:34:42
+
+01. Verify Initial GitHub Push
+
+> git status --short --branch
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Git status failed."
+    }
+
+    "LOCAL COMMIT : $local"
+    "REMOTE COMMIT: $remoteHash"
+    "PASS: Local and GitHub main match"
+## main...origin/main
+LOCAL COMMIT : fb68f5ceb4b45270eee3cc450f49d25cb2f34804
+REMOTE COMMIT: fb68f5ceb4b45270eee3cc450f49d25cb2f34804
+PASS: Local and GitHub main match
+Failed: False
+
+02. Clone Repository into Separate Directory
+
+> git clone $url $clone
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Git clone failed."
+    }
+
+    $head = git -C $clone rev-parse HEAD
+
+    if ($LASTEXITCODE -ne 0 -or $head -ne $local) {
+        throw "Clone commit verification failed."
+    }
+
+    "CLONE DIRECTORY: $clone"
+    "CLONE COMMIT: $head"
+    "PASS: Independent clone created"
+git : Cloning into 'C:\2026Codyssey_AllInOne\M_E1-2_Clone'...
+위치 줄:52 문자:5
++     git clone $url $clone
++     ~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Cloning into 'C..._E1-2_Clone'...:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+CLONE DIRECTORY: C:\2026Codyssey_AllInOne\M_E1-2_Clone
+CLONE COMMIT: fb68f5ceb4b45270eee3cc450f49d25cb2f34804
+PASS: Independent clone created
+Failed: False
+
+03. Configure Clone Git Identity
+
+> $email = git -C $root config --local user.email
+
+    if ($LASTEXITCODE -ne 0 -or
+        $email -notmatch '^\d+\+cody26jade@users\.noreply\.github\.com$') {
+
+        throw "Invalid source Git email."
+    }
+
+    git -C $clone config --local user.name cody26jade
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Clone username setup failed."
+    }
+
+    git -C $clone config --local user.email $email
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Clone email setup failed."
+    }
+
+    git -C $clone config --local credential.username cody26jade
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Clone credential setup failed."
+    }
+
+    git -C $clone config --local credential.useHttpPath true
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Clone credential path setup failed."
+    }
+
+    "PASS: Clone Git identity configured"
+PASS: Clone Git identity configured
+Failed: False
+
+04. Create Collaboration Branch
+
+> git -C $clone checkout -b docs/collaboration-guide
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Branch creation failed."
+    }
+
+    git -C $clone branch
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Branch verification failed."
+    }
+
+    "PASS: Collaboration branch created"
+git : Switched to a new branch 'docs/collaboration-guide'
+위치 줄:108 문자:5
++     git -C $clone checkout -b docs/collaboration-guide
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Switched to a n...boration-guide':String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+* docs/collaboration-guide
+  main
+PASS: Collaboration branch created
+Failed: False
+
+05. Create Collaboration Documentation
+
+> $branch = git -C $clone symbolic-ref --short HEAD
+
+    if ($LASTEXITCODE -ne 0 -or
+        $branch -ne "docs/collaboration-guide") {
+
+        throw "Unexpected clone branch."
+    }
+
+    $directory = Join-Path $clone "docs"
+
+    New-Item `
+        -ItemType Directory `
+        -Path $directory `
+        -Force | Out-Null
+
+    $path = Join-Path $directory "COLLABORATION.md"
+
+    if (Test-Path -LiteralPath $path) {
+        throw "Collaboration document already exists."
+    }
+
+    $content = @'
+# Git Collaboration Guide
+
+## Project
+
+M_E1-2: Machine Tool and Vibration Analysis Quiz
+
+## Purpose
+
+This document explains how to contribute to the project
+using a separate Git clone and a feature branch.
+
+## Workflow
+
+1. Clone the public repository.
+2. Create a dedicated branch.
+3. Modify project documentation or source code.
+4. Run the automated tests.
+5. Commit the changes.
+6. Merge the branch into main.
+7. Push main to GitHub.
+8. Pull the changes into the original repository.
+
+## Commands
+
+    git clone https://github.com/cody26jade/M_E1-2.git
+    git checkout -b feature/example
+    python -m unittest discover -s tests
+    git add .
+    git commit -m "Describe the change"
+    git checkout main
+    git merge --no-ff feature/example
+    git push origin main
+    git pull --ff-only origin main
+
+## Runtime Data Protection
+
+The local state.json file contains user-created questions,
+best scores and play history.
+
+It must not be committed or shared through GitHub.
+
+## Testing
+
+Run the complete unit test suite before merging changes.
+
+Python 3.10 or later is required.
+No third-party Python packages are required.
+'@
+
+    $utf8 = New-Object System.Text.UTF8Encoding($false)
+
+    [System.IO.File]::WriteAllText(
+        $path,
+        $content.TrimEnd() + "`n",
+        $utf8
+    )
+
+    "CREATED: docs/COLLABORATION.md"
+    "PASS: Collaboration documentation created"
+CREATED: docs/COLLABORATION.md
+PASS: Collaboration documentation created
+Failed: False
+
+06. Run Tests in Cloned Repository
+
+> Push-Location $clone
+
+    try {
+
+        $code = @'
+import unittest
+
+suite = unittest.defaultTestLoader.discover("tests")
+
+count = suite.countTestCases()
+
+print("DISCOVERED TESTS:", count)
+
+if count != 138:
+    raise SystemExit("Expected 138 tests.")
+
+result = unittest.TextTestRunner(
+    verbosity=1
+).run(suite)
+
+print("TESTS RUN:", result.testsRun)
+print("FAILURES:", len(result.failures))
+print("ERRORS:", len(result.errors))
+print("SKIPPED:", len(result.skipped))
+
+raise SystemExit(
+    0 if result.wasSuccessful()
+    and not result.skipped
+    else 1
+)
+'@
+
+        $code | python - 2>&1
+
+        if ($LASTEXITCODE -ne 0) {
+            throw "Clone tests failed."
+        }
+
+    } finally {
+
+        Pop-Location
+    }
+
+    "PASS: All 138 cloned application tests passed"
+python : ..........................................................................................................................................
+위치 줄:242 문자:17
++         $code | python - 2>&1
++                 ~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (.................................:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+----------------------------------------------------------------------
+Ran 138 tests in 0.221s
+
+OK
+DISCOVERED TESTS: 138
+TESTS RUN: 138
+FAILURES: 0
+ERRORS: 0
+SKIPPED: 0
+PASS: All 138 cloned application tests passed
+Failed: False
+
+07. Commit Collaboration Branch
+
+> $branch = git -C $clone symbolic-ref --short HEAD
+
+    if ($LASTEXITCODE -ne 0 -or
+        $branch -ne "docs/collaboration-guide") {
+
+        throw "Unexpected clone branch."
+    }
+
+    foreach ($kind in @(
+        "GIT_AUTHOR_IDENT",
+        "GIT_COMMITTER_IDENT"
+    )) {
+
+        $identity = git -C $clone var $kind
+
+        if ($LASTEXITCODE -ne 0 -or
+            $identity -notmatch '<\d+\+cody26jade@users\.noreply\.github\.com>') {
+
+            throw "Clone Git identity verification failed."
+        }
+    }
+
+    Push-Location $clone
+
+    try {
+
+        python -m unittest discover -s tests 2>&1
+
+        if ($LASTEXITCODE -ne 0) {
+            throw "Pre-commit tests failed."
+        }
+
+    } finally {
+
+        Pop-Location
+    }
+
+    git -C $clone add -- docs/COLLABORATION.md
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Git add failed."
+    }
+
+    $staged = @(git -C $clone diff --cached --name-only)
+
+    if ($LASTEXITCODE -ne 0 -or
+        $staged.Count -ne 1 -or
+        $staged[0] -ne "docs/COLLABORATION.md") {
+
+        throw "Unexpected staged files."
+    }
+
+    git -C $clone commit -m "Docs: Add Git collaboration workflow guide"
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Branch commit failed."
+    }
+
+    "PASS: Collaboration branch committed"
+python : ..........................................................................................................................................
+위치 줄:284 문자:9
++         python -m unittest discover -s tests 2>&1
++         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (.................................:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+----------------------------------------------------------------------
+Ran 138 tests in 0.198s
+
+OK
+[docs/collaboration-guide dc9964e] Docs: Add Git collaboration workflow guide
+ 1 file changed, 47 insertions(+)
+ create mode 100644 docs/COLLABORATION.md
+PASS: Collaboration branch committed
+Failed: False
+
+08. Checkout Main and Merge Branch
+
+> $branch = git -C $clone symbolic-ref --short HEAD
+
+    if ($LASTEXITCODE -ne 0 -or
+        $branch -ne "docs/collaboration-guide") {
+
+        throw "Unexpected branch before merge."
+    }
+
+    $status = @(git -C $clone status --porcelain)
+
+    if ($LASTEXITCODE -ne 0 -or $status.Count -gt 0) {
+        throw "Clone working tree is not clean."
+    }
+
+    $changed = @(
+        git -C $clone diff --name-only "$local..HEAD"
+    )
+
+    if ($LASTEXITCODE -ne 0 -or
+        $changed.Count -ne 1 -or
+        $changed[0] -ne "docs/COLLABORATION.md") {
+
+        throw "Expected committed collaboration document."
+    }
+
+    git -C $clone checkout main
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Checkout main failed."
+    }
+
+    git -C $clone merge --no-ff `
+        docs/collaboration-guide `
+        -m "Merge collaboration documentation branch"
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Branch merge failed."
+    }
+
+    $parents = git -C $clone log -1 --format="%P"
+
+    if ($LASTEXITCODE -ne 0 -or
+        ($parents -split '\s+').Count -ne 2) {
+
+        throw "Expected a merge commit with two parents."
+    }
+
+    git -C $clone log -5 --oneline --graph --all
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Git graph verification failed."
+    }
+
+    "PASS: Branch merged into main"
+git : Switched to branch 'main'
+위치 줄:346 문자:5
++     git -C $clone checkout main
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Switched to branch 'main':String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Your branch is up to date with 'origin/main'.
+Merge made by the 'ort' strategy.
+ docs/COLLABORATION.md | 47 +++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 47 insertions(+)
+ create mode 100644 docs/COLLABORATION.md
+*   7079323 Merge collaboration documentation branch
+|\  
+| * dc9964e Docs: Add Git collaboration workflow guide
+|/  
+* fb68f5c Docs: Record stability verification evidence
+* 2fe8df1 Test: Verify exception handling and runtime data protection
+* e1fcbcc Fix: Distinguish question and answer colors
+PASS: Branch merged into main
+Failed: False
+
+09. Verify Clone Changes Before Push
+
+> $branch = git -C $clone symbolic-ref --short HEAD
+
+    if ($LASTEXITCODE -ne 0 -or $branch -ne "main") {
+        throw "Expected clone main branch."
+    }
+
+    $status = @(git -C $clone status --porcelain)
+
+    if ($LASTEXITCODE -ne 0 -or $status.Count -gt 0) {
+        throw "Clone working tree is not clean."
+    }
+
+    $changed = @(
+        git -C $clone diff --name-only "$local..HEAD"
+    )
+
+    if ($LASTEXITCODE -ne 0 -or
+        $changed.Count -ne 1 -or
+        $changed[0] -ne "docs/COLLABORATION.md") {
+
+        throw "Unexpected collaboration changes."
+    }
+
+    $parents = git -C $clone log -1 --format="%P"
+
+    if ($LASTEXITCODE -ne 0 -or
+        ($parents -split '\s+').Count -ne 2) {
+
+        throw "Merge commit verification failed."
+    }
+
+    $count = [int](git -C $clone rev-list --count HEAD)
+
+    if ($LASTEXITCODE -ne 0 -or $count -lt 13) {
+        throw "Expected at least thirteen commits."
+    }
+
+    "TOTAL COMMITS: $count"
+    "PASS: Only collaboration documentation changed"
+    "PASS: STEP10C completed"
+TOTAL COMMITS: 13
+PASS: Only collaboration documentation changed
+PASS: STEP10C completed
+Failed: False
+
