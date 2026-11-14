@@ -1,0 +1,1459 @@
+CODYSSEY MISSION REPORT SYSTEM
+M_E1-2 STEP06 - Console Application Development
+Date: 2026-11-14 22:38:15
+
+01. Verify Previous Unit Tests
+
+> python -m unittest discover -s tests 2>&1
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Previous unit tests failed."
+    }
+
+    "PASS: Previous development stage verified"
+python : ................................................
+위치 줄:51 문자:5
++     python -m unittest discover -s tests 2>&1
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (.................................:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+----------------------------------------------------------------------
+Ran 48 tests in 0.025s
+
+OK
+PASS: Previous development stage verified
+Failed: False
+
+02. Save STEP05 Execution Evidence
+
+> $source = Get-ChildItem "C:\2026Codyssey_AllInOne\_Common\logs" -File |
+        Where-Object {
+            $_.Name -like "*M_E1-2*STEP05*QuizGame*Class*Development*"
+        } |
+        Sort-Object LastWriteTime -Descending |
+        Select-Object -First 1
+
+    if (-not $source) {
+        throw "STEP05 execution log not found."
+    }
+
+    $content = Get-Content `
+        -LiteralPath $source.FullName `
+        -Raw `
+        -Encoding UTF8
+
+    if ($content -match '(?m)^Failed:\s*True\s*$') {
+        throw "STEP05 contains failed steps."
+    }
+
+    $results = [regex]::Matches(
+        $content,
+        '(?m)^Failed:\s*False\s*$'
+    )
+
+    if ($results.Count -ne 9) {
+        throw "Expected nine successful STEP05 results."
+    }
+
+    $content = $content -replace `
+        '(?i)([A-Z]:\\Users\\)[^\\\r\n]+(?=\\)', `
+        '${1}<USER>'
+
+    $path = Join-Path `
+        (Get-Location).Path `
+        "logs\05_quizgame_development.txt"
+
+    $utf8 = New-Object System.Text.UTF8Encoding($false)
+
+    [System.IO.File]::WriteAllText(
+        $path,
+        $content,
+        $utf8
+    )
+
+    "PASS: STEP05 execution evidence saved"
+PASS: STEP05 execution evidence saved
+Failed: False
+
+03. Create Feature Branch
+
+> if (-not (Test-Path "logs/05_quizgame_development.txt")) {
+        throw "Previous evidence not found."
+    }
+
+    python -m unittest discover -s tests 2>&1
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Pre-branch tests failed."
+    }
+
+    git checkout -b feature/quiz-console
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Feature branch creation failed."
+    }
+
+    git branch --list
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Branch verification failed."
+    }
+
+    "PASS: Console development branch created"
+python : ................................................
+위치 줄:116 문자:5
++     python -m unittest discover -s tests 2>&1
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (.................................:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+----------------------------------------------------------------------
+Ran 48 tests in 0.023s
+
+OK
+git : Switched to a new branch 'feature/quiz-console'
+위치 줄:122 문자:5
++     git checkout -b feature/quiz-console
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Switched to a n...e/quiz-console':String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+* feature/quiz-console
+  main
+PASS: Console development branch created
+Failed: False
+
+04. Create Main Console Application
+
+> $branch = git symbolic-ref --short HEAD
+
+    if ($LASTEXITCODE -ne 0 -or
+        $branch -ne "feature/quiz-console") {
+
+        throw "Incorrect development branch."
+    }
+
+    $path = Join-Path (Get-Location).Path "main.py"
+
+    if (Test-Path -LiteralPath $path) {
+        throw "main.py already exists. Review required."
+    }
+
+    $content = @'
+"""Console interface for the machine tool vibration quiz."""
+
+import sys
+
+from quiz import Quiz
+from quiz_game import QuizGame
+
+
+LINE = "=" * 58
+SUBLINE = "-" * 58
+
+LEVEL_NAMES = {
+    "beginner": "초급",
+    "intermediate": "중급",
+}
+
+
+def read_text(prompt):
+    """Read a non-empty string."""
+
+    while True:
+        value = input(prompt).strip()
+
+        if value:
+            return value
+
+        print("빈칸은 입력할 수 없습니다.")
+
+
+def read_int(prompt, minimum, maximum):
+    """Read an integer within the allowed range."""
+
+    while True:
+        value = input(prompt).strip()
+
+        try:
+            number = int(value)
+
+        except ValueError:
+            print("숫자를 입력하세요.")
+            continue
+
+        if minimum <= number <= maximum:
+            return number
+
+        print(
+            f"{minimum}~{maximum} 사이의 "
+            "숫자를 입력하세요."
+        )
+
+
+def show_menu(game):
+    """Display the main engineering dashboard."""
+
+    quizzes = game.list_quizzes()
+
+    beginner = len(
+        game.list_quizzes("beginner")
+    )
+
+    intermediate = len(
+        game.list_quizzes("intermediate")
+    )
+
+    best = (
+        "기록 없음"
+        if game.best_score is None
+        else f"{game.best_score:.1f}점"
+    )
+
+    print()
+    print(LINE)
+    print("       MACHINE TOOL & VIBRATION QUIZ")
+    print("       CODYSSEY AI ALL-IN-ONE | M_E1-2")
+    print(LINE)
+
+    print(f" 등록 문제 : {len(quizzes)}개")
+    print(f" 초급 / 중급 : {beginner} / {intermediate}")
+    print(f" 최고 점수 : {best}")
+
+    print(SUBLINE)
+    print(" [1] 퀴즈 풀기 (Play)")
+    print(" [2] 문제 추가 (Add)")
+    print(" [3] 문제 목록 (List)")
+    print(" [4] 최고 점수 (Score)")
+    print(" [0] 프로그램 종료 (Exit)")
+    print(SUBLINE)
+
+
+def show_question(game):
+    """Display the current question and choices."""
+
+    quiz = game.current_quiz
+
+    print()
+    print(LINE)
+
+    print(
+        f" QUESTION "
+        f"{game.question_number:02d}"
+        f" / {game.total_questions:02d}"
+    )
+
+    print(
+        f" 난이도: {LEVEL_NAMES[quiz.difficulty]}"
+        f" | 분야: {quiz.category}"
+    )
+
+    print(SUBLINE)
+    print(quiz.question)
+    print()
+
+    for number, choice in enumerate(
+        quiz.choices,
+        start=1,
+    ):
+        print(f" [{number}] {choice}")
+
+    print(SUBLINE)
+
+
+def show_result(result):
+    """Display the completed game result."""
+
+    print()
+    print(LINE)
+    print("              GAME RESULT")
+    print(LINE)
+
+    print(
+        f" 출제 문제 : "
+        f"{result['total_questions']}개"
+    )
+
+    print(
+        f" 정답 / 오답 : "
+        f"{result['correct_count']} / "
+        f"{result['wrong_count']}"
+    )
+
+    print(
+        f" 힌트 사용 : "
+        f"{result['hint_count']}회"
+    )
+
+    print(
+        f" 획득 점수 : "
+        f"{result['earned_points']} / "
+        f"{result['max_points']}"
+    )
+
+    print(
+        f" 최종 점수 : "
+        f"{result['score']:.1f} / 100점"
+    )
+
+    print(
+        f" 정답률 : "
+        f"{result['accuracy']:.1f}%"
+    )
+
+    print(
+        f" 최고 점수 : "
+        f"{result['best_score']:.1f}점"
+    )
+
+    if result["new_best"]:
+        print(" NEW BEST SCORE!")
+
+    print(LINE)
+
+
+def play_quiz(game):
+    """Run an interactive quiz session."""
+
+    available = len(game.list_quizzes())
+
+    if available == 0:
+        print("등록된 문제가 없습니다.")
+        return
+
+    print()
+    print("===== QUIZ PLAY =====")
+
+    count = read_int(
+        f"출제 문제 수 (1~{available}): ",
+        1,
+        available,
+    )
+
+    game.start_game(
+        count=count,
+        random_order=True,
+        shuffle_choices=True,
+    )
+
+    while game.is_active:
+
+        show_question(game)
+
+        while True:
+
+            value = input(
+                "정답 번호 (1~4), H=힌트, Q=취소: "
+            ).strip().upper()
+
+            if value == "H":
+
+                print(f"힌트: {game.use_hint()}")
+                print("힌트 사용 후 정답은 5점입니다.")
+
+                continue
+
+            if value == "Q":
+
+                game.cancel_game()
+                print("게임을 취소했습니다.")
+
+                return
+
+            try:
+                answer = int(value)
+
+                result = game.submit_answer(
+                    answer
+                )
+
+            except ValueError:
+                print("1~4, H 또는 Q를 입력하세요.")
+                continue
+
+            if result["correct"]:
+                print(
+                    f"정답입니다! "
+                    f"+{result['points']}점"
+                )
+            else:
+                print("오답입니다. +0점")
+
+            print(
+                f"정답: "
+                f"{result['correct_answer']}. "
+                f"{result['correct_choice']}"
+            )
+
+            print(
+                f"해설: {result['explanation']}"
+            )
+
+            break
+
+    show_result(game.get_result())
+
+
+def add_question(game):
+    """Read and register a new question."""
+
+    print()
+    print("===== ADD QUESTION =====")
+
+    question = read_text("문제 내용: ")
+
+    if any(
+        q.question.strip().casefold()
+        == question.casefold()
+        for q in game.list_quizzes()
+    ):
+        print("이미 등록된 문제입니다.")
+        return
+
+    choices = []
+
+    for number in range(1, 5):
+
+        while True:
+
+            choice = read_text(
+                f"보기 {number}: "
+            )
+
+            if choice in choices:
+                print("중복된 보기입니다.")
+                continue
+
+            choices.append(choice)
+            break
+
+    answer = read_int(
+        "정답 번호 (1~4): ",
+        1,
+        4,
+    )
+
+    level = read_int(
+        "난이도 (1=초급, 2=중급): ",
+        1,
+        2,
+    )
+
+    difficulty = (
+        "beginner"
+        if level == 1
+        else "intermediate"
+    )
+
+    category = read_text("분야: ")
+    hint = read_text("힌트: ")
+    explanation = read_text("해설: ")
+
+    quiz = Quiz(
+        id=game.next_quiz_id(),
+        difficulty=difficulty,
+        category=category,
+        question=question,
+        choices=choices,
+        answer=answer,
+        hint=hint,
+        explanation=explanation,
+    )
+
+    quiz_id = game.add_quiz(quiz)
+
+    print()
+    print(f"문제 등록 완료! ID: {quiz_id}")
+    print(
+        f"전체 등록 문제: "
+        f"{len(game.list_quizzes())}개"
+    )
+
+
+def list_questions(game):
+    """Display all registered questions."""
+
+    quizzes = game.list_quizzes()
+
+    print()
+    print(LINE)
+    print("              QUESTION LIST")
+    print(LINE)
+
+    if not quizzes:
+        print("등록된 문제가 없습니다.")
+        return
+
+    for quiz in quizzes:
+
+        level = LEVEL_NAMES[quiz.difficulty]
+
+        print(
+            f"[{quiz.id:03d}] "
+            f"[{level}] "
+            f"{quiz.question}"
+        )
+
+    print(SUBLINE)
+    print(f"전체 등록 문제: {len(quizzes)}개")
+
+
+def show_score(game):
+    """Display the best score."""
+
+    print()
+    print(LINE)
+    print("              BEST SCORE")
+    print(LINE)
+
+    if game.best_score is None:
+        print("아직 완료된 게임 기록이 없습니다.")
+
+    else:
+        print(
+            f"최고 점수: "
+            f"{game.best_score:.1f} / 100점"
+        )
+
+    print(LINE)
+
+
+def run_menu(game):
+    """Run the main menu until the user exits."""
+
+    actions = {
+        1: play_quiz,
+        2: add_question,
+        3: list_questions,
+        4: show_score,
+    }
+
+    try:
+
+        while True:
+
+            show_menu(game)
+
+            choice = read_int(
+                "메뉴 선택 (0~4): ",
+                0,
+                4,
+            )
+
+            if choice == 0:
+                print("프로그램을 종료합니다.")
+                return
+
+            try:
+                actions[choice](game)
+
+            except (ValueError, RuntimeError) as error:
+
+                game.cancel_game()
+
+                print(f"오류: {error}")
+
+    except (KeyboardInterrupt, EOFError):
+
+        game.cancel_game()
+
+        print()
+        print("입력이 중단되었습니다.")
+        print("프로그램을 안전하게 종료합니다.")
+
+
+def main():
+    """Initialize the game and launch the menu."""
+
+    game = QuizGame()
+
+    try:
+        game.load_default_quizzes()
+
+    except (OSError, ValueError) as error:
+
+        print(
+            f"기본 퀴즈를 불러올 수 없습니다: "
+            f"{error}"
+        )
+
+        return 1
+
+    run_menu(game)
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
+'@
+
+    $utf8 = New-Object System.Text.UTF8Encoding($false)
+
+    [System.IO.File]::WriteAllText(
+        $path,
+        $content.TrimEnd() + "`n",
+        $utf8
+    )
+
+    Get-Item -LiteralPath $path |
+        Select-Object Name, Length
+
+    "PASS: Main console application created"
+
+Name    Length
+----    ------
+main.py   8746
+PASS: Main console application created
+Failed: False
+
+05. Create Console Unit Tests
+
+> $branch = git symbolic-ref --short HEAD
+
+    if ($LASTEXITCODE -ne 0 -or
+        $branch -ne "feature/quiz-console") {
+
+        throw "Incorrect development branch."
+    }
+
+    $path = Join-Path `
+        (Get-Location).Path `
+        "tests\test_console.py"
+
+    if (Test-Path -LiteralPath $path) {
+        throw "test_console.py already exists."
+    }
+
+    $content = @'
+"""Tests for the interactive console interface."""
+
+import io
+import random
+import unittest
+from contextlib import redirect_stdout
+from unittest.mock import patch
+
+from main import (
+    read_text,
+    read_int,
+    show_menu,
+    play_quiz,
+    add_question,
+    list_questions,
+    show_score,
+    run_menu,
+)
+
+from quiz_game import QuizGame
+
+
+class TestConsole(unittest.TestCase):
+
+    def setUp(self):
+        self.game = QuizGame(
+            rng=random.Random(42)
+        )
+
+        self.game.load_default_quizzes()
+
+    def capture(self, function, *args, inputs=None):
+
+        output = io.StringIO()
+
+        with redirect_stdout(output):
+
+            if inputs is None:
+                result = function(*args)
+
+            else:
+
+                with patch(
+                    "builtins.input",
+                    side_effect=inputs,
+                ):
+                    result = function(*args)
+
+        return result, output.getvalue()
+
+    def test_01_read_text_validation(self):
+
+        result, output = self.capture(
+            read_text,
+            "Question: ",
+            inputs=["", " ", "  CNC  "],
+        )
+
+        self.assertEqual(result, "CNC")
+        self.assertIn("빈칸", output)
+
+    def test_02_read_int_validation(self):
+
+        result, output = self.capture(
+            read_int,
+            "Number: ",
+            1,
+            4,
+            inputs=["", "abc", "0", "5", " 2 "],
+        )
+
+        self.assertEqual(result, 2)
+        self.assertIn("숫자를 입력하세요", output)
+
+    def test_03_show_menu(self):
+
+        _, output = self.capture(
+            show_menu,
+            self.game,
+        )
+
+        self.assertIn("20개", output)
+        self.assertIn("[1]", output)
+        self.assertIn("[0]", output)
+
+    def test_04_list_questions(self):
+
+        _, output = self.capture(
+            list_questions,
+            self.game,
+        )
+
+        self.assertIn("[001]", output)
+        self.assertIn("[020]", output)
+        self.assertIn("20개", output)
+
+    def test_05_empty_question_list(self):
+
+        _, output = self.capture(
+            list_questions,
+            QuizGame(),
+        )
+
+        self.assertIn(
+            "등록된 문제가 없습니다",
+            output,
+        )
+
+    def test_06_add_question(self):
+
+        _, output = self.capture(
+            add_question,
+            self.game,
+            inputs=[
+                "New console question",
+                "Choice A",
+                "Choice B",
+                "Choice C",
+                "Choice D",
+                "1",
+                "2",
+                "Test category",
+                "Test hint",
+                "Test explanation",
+            ],
+        )
+
+        self.assertEqual(
+            len(self.game.list_quizzes()),
+            21,
+        )
+
+        self.assertIn("ID: 21", output)
+
+    def test_07_duplicate_question(self):
+
+        question = (
+            self.game.list_quizzes()[0].question
+        )
+
+        _, output = self.capture(
+            add_question,
+            self.game,
+            inputs=[question],
+        )
+
+        self.assertIn(
+            "이미 등록된 문제",
+            output,
+        )
+
+        self.assertEqual(
+            len(self.game.list_quizzes()),
+            20,
+        )
+
+    def test_08_score_without_record(self):
+
+        _, output = self.capture(
+            show_score,
+            self.game,
+        )
+
+        self.assertIn(
+            "아직 완료된 게임 기록",
+            output,
+        )
+
+    def test_09_play_with_correct_answer(self):
+
+        def fake_input(prompt):
+
+            if "출제 문제 수" in prompt:
+                return "1"
+
+            return str(
+                self.game.current_quiz.answer
+            )
+
+        output = io.StringIO()
+
+        with redirect_stdout(output):
+
+            with patch(
+                "builtins.input",
+                side_effect=fake_input,
+            ):
+                play_quiz(self.game)
+
+        self.assertEqual(
+            self.game.best_score,
+            100.0,
+        )
+
+        self.assertIn(
+            "GAME RESULT",
+            output.getvalue(),
+        )
+
+    def test_10_play_with_hint(self):
+
+        hint_requested = False
+
+        def fake_input(prompt):
+
+            nonlocal hint_requested
+
+            if "출제 문제 수" in prompt:
+                return "1"
+
+            if not hint_requested:
+
+                hint_requested = True
+
+                return "H"
+
+            return str(
+                self.game.current_quiz.answer
+            )
+
+        output = io.StringIO()
+
+        with redirect_stdout(output):
+
+            with patch(
+                "builtins.input",
+                side_effect=fake_input,
+            ):
+                play_quiz(self.game)
+
+        self.assertEqual(
+            self.game.best_score,
+            50.0,
+        )
+
+    def test_11_cancel_game(self):
+
+        _, output = self.capture(
+            play_quiz,
+            self.game,
+            inputs=["2", "Q"],
+        )
+
+        self.assertFalse(self.game.is_active)
+
+        self.assertIsNone(
+            self.game.best_score
+        )
+
+        self.assertIn("취소", output)
+
+    def test_12_empty_game(self):
+
+        _, output = self.capture(
+            play_quiz,
+            QuizGame(),
+        )
+
+        self.assertIn(
+            "등록된 문제가 없습니다",
+            output,
+        )
+
+    def test_13_menu_exit(self):
+
+        _, output = self.capture(
+            run_menu,
+            self.game,
+            inputs=["0"],
+        )
+
+        self.assertIn(
+            "프로그램을 종료합니다",
+            output,
+        )
+
+    def test_14_menu_invalid_input(self):
+
+        _, output = self.capture(
+            run_menu,
+            self.game,
+            inputs=["abc", "9", "", "0"],
+        )
+
+        self.assertIn(
+            "숫자를 입력하세요",
+            output,
+        )
+
+        self.assertIn(
+            "프로그램을 종료합니다",
+            output,
+        )
+
+    def test_15_keyboard_interrupt(self):
+
+        output = io.StringIO()
+
+        with redirect_stdout(output):
+
+            with patch(
+                "builtins.input",
+                side_effect=KeyboardInterrupt,
+            ):
+                run_menu(self.game)
+
+        self.assertIn(
+            "안전하게 종료",
+            output.getvalue(),
+        )
+
+    def test_16_eof_error(self):
+
+        output = io.StringIO()
+
+        with redirect_stdout(output):
+
+            with patch(
+                "builtins.input",
+                side_effect=EOFError,
+            ):
+                run_menu(self.game)
+
+        self.assertIn(
+            "안전하게 종료",
+            output.getvalue(),
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()
+'@
+
+    $utf8 = New-Object System.Text.UTF8Encoding($false)
+
+    [System.IO.File]::WriteAllText(
+        $path,
+        $content.TrimEnd() + "`n",
+        $utf8
+    )
+
+    "PASS: Sixteen console tests created"
+PASS: Sixteen console tests created
+Failed: False
+
+06. Verify Syntax and All Unit Tests
+
+> python -m py_compile `
+        main.py `
+        quiz.py `
+        quiz_game.py `
+        tests/test_console.py
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Python syntax verification failed."
+    }
+
+    $code = @'
+import unittest
+
+suite = unittest.defaultTestLoader.discover("tests")
+
+count = suite.countTestCases()
+
+print("DISCOVERED TESTS:", count)
+
+if count != 64:
+    raise SystemExit("Expected 64 tests.")
+
+result = unittest.TextTestRunner(
+    verbosity=2
+).run(suite)
+
+raise SystemExit(
+    0 if result.wasSuccessful() else 1
+)
+'@
+
+    $code | python - 2>&1
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Unit tests failed."
+    }
+
+    "PASS: All 64 unit tests completed"
+python : test_01_read_text_validation (test_console.TestConsole.test_01_read_text_validation) ... ok
+위치 줄:1012 문자:13
++     $code | python - 2>&1
++             ~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (test_01_read_te...idation) ... ok:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+test_02_read_int_validation (test_console.TestConsole.test_02_read_int_validation) ... ok
+test_03_show_menu (test_console.TestConsole.test_03_show_menu) ... ok
+test_04_list_questions (test_console.TestConsole.test_04_list_questions) ... ok
+test_05_empty_question_list (test_console.TestConsole.test_05_empty_question_list) ... ok
+test_06_add_question (test_console.TestConsole.test_06_add_question) ... ok
+test_07_duplicate_question (test_console.TestConsole.test_07_duplicate_question) ... ok
+test_08_score_without_record (test_console.TestConsole.test_08_score_without_record) ... ok
+test_09_play_with_correct_answer (test_console.TestConsole.test_09_play_with_correct_answer) ... ok
+test_10_play_with_hint (test_console.TestConsole.test_10_play_with_hint) ... ok
+test_11_cancel_game (test_console.TestConsole.test_11_cancel_game) ... ok
+test_12_empty_game (test_console.TestConsole.test_12_empty_game) ... ok
+test_13_menu_exit (test_console.TestConsole.test_13_menu_exit) ... ok
+test_14_menu_invalid_input (test_console.TestConsole.test_14_menu_invalid_input) ... ok
+test_15_keyboard_interrupt (test_console.TestConsole.test_15_keyboard_interrupt) ... ok
+test_16_eof_error (test_console.TestConsole.test_16_eof_error) ... ok
+test_01_create_object (test_quiz.TestQuiz.test_01_create_object) ... ok
+test_02_correct_answer (test_quiz.TestQuiz.test_02_correct_answer) ... ok
+test_03_wrong_answer (test_quiz.TestQuiz.test_03_wrong_answer) ... ok
+test_04_invalid_answer_range (test_quiz.TestQuiz.test_04_invalid_answer_range) ... ok
+test_05_invalid_answer_type (test_quiz.TestQuiz.test_05_invalid_answer_type) ... ok
+test_06_get_hint (test_quiz.TestQuiz.test_06_get_hint) ... ok
+test_07_get_explanation (test_quiz.TestQuiz.test_07_get_explanation) ... ok
+test_08_correct_choice (test_quiz.TestQuiz.test_08_correct_choice) ... ok
+test_09_to_dict (test_quiz.TestQuiz.test_09_to_dict) ... ok
+test_10_round_trip (test_quiz.TestQuiz.test_10_round_trip) ... ok
+test_11_missing_field (test_quiz.TestQuiz.test_11_missing_field) ... ok
+test_12_invalid_choice_count (test_quiz.TestQuiz.test_12_invalid_choice_count) ... ok
+test_13_duplicate_choices (test_quiz.TestQuiz.test_13_duplicate_choices) ... ok
+test_14_invalid_difficulty (test_quiz.TestQuiz.test_14_invalid_difficulty) ... ok
+test_15_empty_question (test_quiz.TestQuiz.test_15_empty_question) ... ok
+test_16_invalid_correct_answer (test_quiz.TestQuiz.test_16_invalid_correct_answer) ... ok
+test_17_shuffle_preserves_answer (test_quiz.TestQuiz.test_17_shuffle_preserves_answer) ... ok
+test_18_shuffle_preserves_original (test_quiz.TestQuiz.test_18_shuffle_preserves_original) ... ok
+test_19_load_all_default_questions (test_quiz.TestQuiz.test_19_load_all_default_questions) ... ok
+test_20_independent_choice_lists (test_quiz.TestQuiz.test_20_independent_choice_lists) ... ok
+test_01_default_question_count (test_quiz_game.TestQuizGame.test_01_default_question_count) ... ok
+test_02_difficulty_filter (test_quiz_game.TestQuizGame.test_02_difficulty_filter) ... ok
+test_03_add_quiz (test_quiz_game.TestQuizGame.test_03_add_quiz) ... ok
+test_04_duplicate_id (test_quiz_game.TestQuizGame.test_04_duplicate_id) ... ok
+test_05_duplicate_question (test_quiz_game.TestQuizGame.test_05_duplicate_question) ... ok
+test_06_next_id (test_quiz_game.TestQuizGame.test_06_next_id) ... ok
+test_07_start_game (test_quiz_game.TestQuizGame.test_07_start_game) ... ok
+test_08_invalid_count (test_quiz_game.TestQuizGame.test_08_invalid_count) ... ok
+test_09_empty_question_bank (test_quiz_game.TestQuizGame.test_09_empty_question_bank) ... ok
+test_10_correct_answer_points (test_quiz_game.TestQuizGame.test_10_correct_answer_points) ... ok
+test_11_wrong_answer_points (test_quiz_game.TestQuizGame.test_11_wrong_answer_points) ... ok
+test_12_hint_points (test_quiz_game.TestQuizGame.test_12_hint_points) ... ok
+test_13_repeated_hint (test_quiz_game.TestQuizGame.test_13_repeated_hint) ... ok
+test_14_hint_with_wrong_answer (test_quiz_game.TestQuizGame.test_14_hint_with_wrong_answer) ... ok
+test_15_invalid_answer_does_not_advance (test_quiz_game.TestQuizGame.test_15_invalid_answer_does_not_advance) ... ok
+test_16_advance_question (test_quiz_game.TestQuizGame.test_16_advance_question) ... ok
+test_17_normalized_score (test_quiz_game.TestQuizGame.test_17_normalized_score) ... ok
+test_18_best_score (test_quiz_game.TestQuizGame.test_18_best_score) ... ok
+test_19_cancel_game (test_quiz_game.TestQuizGame.test_19_cancel_game) ... ok
+test_20_completed_game_state (test_quiz_game.TestQuizGame.test_20_completed_game_state) ... ok
+test_21_no_active_game (test_quiz_game.TestQuizGame.test_21_no_active_game) ... ok
+test_22_random_unique_questions (test_quiz_game.TestQuizGame.test_22_random_unique_questions) ... ok
+test_23_question_bank_unchanged (test_quiz_game.TestQuizGame.test_23_question_bank_unchanged) ... ok
+test_24_invalid_json_preserves_bank (test_quiz_game.TestQuizGame.test_24_invalid_json_preserves_bank) ... ok
+test_25_prevent_changes_during_game (test_quiz_game.TestQuizGame.test_25_prevent_changes_during_game) ... ok
+test_26_result_is_independent (test_quiz_game.TestQuizGame.test_26_result_is_independent) ... ok
+test_27_zero_score_is_valid (test_quiz_game.TestQuizGame.test_27_zero_score_is_valid) ... ok
+test_28_hint_resets_next_question (test_quiz_game.TestQuizGame.test_28_hint_resets_next_question) ... ok
+
+----------------------------------------------------------------------
+Ran 64 tests in 0.048s
+
+OK
+DISCOVERED TESTS: 64
+PASS: All 64 unit tests completed
+Failed: False
+
+07. Run Actual Console Smoke Test
+
+> $env:PYTHONIOENCODING = "utf-8"
+
+    $previousEncoding = [Console]::OutputEncoding
+
+    try {
+
+        [Console]::OutputEncoding = `
+            New-Object System.Text.UTF8Encoding($false)
+
+        $output = @(
+            @("3", "4", "0") |
+                python main.py 2>&1
+        )
+
+        $exitCode = $LASTEXITCODE
+
+        $output | ForEach-Object {
+            "$_"
+        }
+
+        if ($exitCode -ne 0) {
+            throw "Console application failed."
+        }
+
+        $text = $output -join "`n"
+
+        foreach ($marker in @(
+            "MACHINE TOOL & VIBRATION QUIZ",
+            "QUESTION LIST",
+            "BEST SCORE"
+        )) {
+
+            if (-not $text.Contains($marker)) {
+                throw "Missing console output: $marker"
+            }
+        }
+
+        "PASS: Actual console smoke test completed"
+    }
+    finally {
+
+        [Console]::OutputEncoding = $previousEncoding
+
+        Remove-Item Env:PYTHONIOENCODING `
+            -ErrorAction SilentlyContinue
+    }
+
+==========================================================
+       MACHINE TOOL & VIBRATION QUIZ
+       CODYSSEY AI ALL-IN-ONE | M_E1-2
+==========================================================
+ 등록 문제 : 20개
+ 초급 / 중급 : 10 / 10
+ 최고 점수 : 기록 없음
+----------------------------------------------------------
+ [1] 퀴즈 풀기 (Play)
+ [2] 문제 추가 (Add)
+ [3] 문제 목록 (List)
+ [4] 최고 점수 (Score)
+ [0] 프로그램 종료 (Exit)
+----------------------------------------------------------
+메뉴 선택 (0~4): 
+==========================================================
+              QUESTION LIST
+==========================================================
+[001] [초급] CNC의 의미는 무엇인가?
+[002] [초급] 머시닝센터 주축(Spindle)의 주요 역할은 무엇인가?
+[003] [초급] ATC의 주요 기능은 무엇인가?
+[004] [초급] 볼스크루(Ball Screw)의 주요 역할은 무엇인가?
+[005] [초급] 진동 가속도의 SI 단위는 무엇인가?
+[006] [초급] 주파수의 단위는 무엇인가?
+[007] [초급] RMS가 의미하는 것은 무엇인가?
+[008] [초급] FFT를 이용하는 주요 목적은 무엇인가?
+[009] [초급] 주축이 3000 rpm으로 회전할 때 회전주파수는 얼마인가?
+[010] [초급] 공진(Resonance)이 발생하기 쉬운 조건은 무엇인가?
+[011] [중급] 샘플링 주파수가 25.6 kHz일 때 1초 동안 취득하는 샘플 수는 얼마인가?
+[012] [중급] 샘플링 주파수가 25.6 kHz일 때 나이퀴스트 주파수는 얼마인가?
+[013] [중급] 10초 동안 측정한 신호 전체를 FFT할 때 기본 주파수 빈 간격은 얼마인가?
+[014] [중급] 회전체 불평형에서 대표적으로 관찰되는 진동 성분은 무엇인가?
+[015] [중급] BPFO는 어떤 베어링 결함과 관련된 주파수인가?
+[016] [중급] BPFI는 어떤 베어링 결함과 관련된 주파수인가?
+[017] [중급] 포락선 분석(Envelope Analysis)의 주요 활용 목적은 무엇인가?
+[018] [중급] 주파수 f에서 가속도 진폭 A를 속도 진폭 V로 변환하는 식은 무엇인가?
+[019] [중급] 3축 가속도 센서를 사용하는 주요 장점은 무엇인가?
+[020] [중급] 측정 피크와 베어링 이론 결함주파수가 일치할 때 가장 적절한 판단은 무엇인가?
+----------------------------------------------------------
+전체 등록 문제: 20개
+
+==========================================================
+       MACHINE TOOL & VIBRATION QUIZ
+       CODYSSEY AI ALL-IN-ONE | M_E1-2
+==========================================================
+ 등록 문제 : 20개
+ 초급 / 중급 : 10 / 10
+ 최고 점수 : 기록 없음
+----------------------------------------------------------
+ [1] 퀴즈 풀기 (Play)
+ [2] 문제 추가 (Add)
+ [3] 문제 목록 (List)
+ [4] 최고 점수 (Score)
+ [0] 프로그램 종료 (Exit)
+----------------------------------------------------------
+메뉴 선택 (0~4): 
+==========================================================
+              BEST SCORE
+==========================================================
+아직 완료된 게임 기록이 없습니다.
+==========================================================
+
+==========================================================
+       MACHINE TOOL & VIBRATION QUIZ
+       CODYSSEY AI ALL-IN-ONE | M_E1-2
+==========================================================
+ 등록 문제 : 20개
+ 초급 / 중급 : 10 / 10
+ 최고 점수 : 기록 없음
+----------------------------------------------------------
+ [1] 퀴즈 풀기 (Play)
+ [2] 문제 추가 (Add)
+ [3] 문제 목록 (List)
+ [4] 최고 점수 (Score)
+ [0] 프로그램 종료 (Exit)
+----------------------------------------------------------
+메뉴 선택 (0~4): 프로그램을 종료합니다.
+PASS: Actual console smoke test completed
+Failed: False
+
+08. Commit Console Feature
+
+> $branch = git symbolic-ref --short HEAD
+
+    if ($LASTEXITCODE -ne 0 -or
+        $branch -ne "feature/quiz-console") {
+
+        throw "Incorrect feature branch."
+    }
+
+    $files = @(
+        "main.py",
+        "tests/test_console.py",
+        "logs/05_quizgame_development.txt"
+    )
+
+    foreach ($file in $files) {
+
+        if (-not (Test-Path -LiteralPath $file -PathType Leaf)) {
+            throw "Missing required file: $file"
+        }
+    }
+
+    $code = @'
+import unittest
+
+suite = unittest.defaultTestLoader.discover("tests")
+
+if suite.countTestCases() != 64:
+    raise SystemExit("Expected 64 tests.")
+
+result = unittest.TextTestRunner(
+    verbosity=1
+).run(suite)
+
+raise SystemExit(
+    0 if result.wasSuccessful() else 1
+)
+'@
+
+    $code | python - 2>&1
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Pre-commit tests failed."
+    }
+
+    git add -- $files
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Git add failed."
+    }
+
+    $staged = @(git diff --cached --name-only)
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Staged file verification failed."
+    }
+
+    $difference = @(
+        Compare-Object `
+            -ReferenceObject $files `
+            -DifferenceObject $staged
+    )
+
+    if ($difference.Count -gt 0) {
+        throw "Unexpected staged files."
+    }
+
+    git commit -m "Feat: Implement interactive quiz console"
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Console feature commit failed."
+    }
+
+    "PASS: Console feature committed"
+python : ................................................................
+위치 줄:1111 문자:13
++     $code | python - 2>&1
++             ~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (.................................:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+----------------------------------------------------------------------
+Ran 64 tests in 0.039s
+
+OK
+git : warning: in the working copy of 'logs/05_quizgame_development.txt', CRLF will be replaced by LF the next time Git touches it
+위치 줄:1117 문자:5
++     git add -- $files
++     ~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (warning: in the... Git touches it:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+[feature/quiz-console 2c19fe7] Feat: Implement interactive quiz console
+ 3 files changed, 2088 insertions(+)
+ create mode 100644 logs/05_quizgame_development.txt
+ create mode 100644 main.py
+ create mode 100644 tests/test_console.py
+PASS: Console feature committed
+Failed: False
+
+09. Merge Feature Branch into Main
+
+> $branch = git symbolic-ref --short HEAD
+
+    if ($LASTEXITCODE -ne 0 -or
+        $branch -ne "feature/quiz-console") {
+
+        throw "Incorrect feature branch."
+    }
+
+    $count = git rev-list --count HEAD
+
+    if ($LASTEXITCODE -ne 0 -or $count -ne "4") {
+        throw "Expected four commits before merge."
+    }
+
+    $status = @(git status --porcelain)
+
+    if ($LASTEXITCODE -ne 0 -or $status.Count -gt 0) {
+        throw "Feature branch is not clean."
+    }
+
+    python -m unittest discover -s tests 2>&1
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Pre-merge tests failed."
+    }
+
+    git checkout main
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Checkout main failed."
+    }
+
+    git merge --no-ff feature/quiz-console `
+        -m "Merge feature/quiz-console into main"
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Feature branch merge failed."
+    }
+
+    "PASS: Feature branch merged into main"
+python : ................................................................
+위치 줄:1170 문자:5
++     python -m unittest discover -s tests 2>&1
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (.................................:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+----------------------------------------------------------------------
+Ran 64 tests in 0.041s
+
+OK
+git : Switched to branch 'main'
+위치 줄:1176 문자:5
++     git checkout main
++     ~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Switched to branch 'main':String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Merge made by the 'ort' strategy.
+ logs/05_quizgame_development.txt | 1311 ++++++++++++++++++++++++++++++++++++++
+ main.py                          |  446 +++++++++++++
+ tests/test_console.py            |  331 ++++++++++
+ 3 files changed, 2088 insertions(+)
+ create mode 100644 logs/05_quizgame_development.txt
+ create mode 100644 main.py
+ create mode 100644 tests/test_console.py
+PASS: Feature branch merged into main
+Failed: False
+
+10. Verify Final Status
+
+> $branch = git symbolic-ref --short HEAD
+
+    if ($LASTEXITCODE -ne 0 -or $branch -ne "main") {
+        throw "Expected main branch."
+    }
+
+    $count = git rev-list --count HEAD
+
+    if ($LASTEXITCODE -ne 0 -or $count -ne "5") {
+        throw "Expected five Git commits."
+    }
+
+    git log --oneline --graph --all
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Git history verification failed."
+    }
+
+    git status --short --branch
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Git status failed."
+    }
+
+    $status = @(git status --porcelain)
+
+    if ($LASTEXITCODE -ne 0 -or $status.Count -gt 0) {
+        throw "Working tree is not clean."
+    }
+
+    python -m unittest discover -s tests 2>&1
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Post-merge tests failed."
+    }
+
+    "TOTAL COMMITS: $count"
+    "TOTAL UNIT TESTS EXPECTED: 64"
+    "PASS: STEP06 completed"
+*   a01099c Merge feature/quiz-console into main
+|\  
+| * 2c19fe7 Feat: Implement interactive quiz console
+|/  
+* a49c5db Implement QuizGame engine and scoring tests
+* ccc8cb6 Implement Quiz class with validation and unit tests
+* f161dea Initialize quiz project and add 20 default questions
+## main
+python : ................................................................
+위치 줄:1224 문자:5
++     python -m unittest discover -s tests 2>&1
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (.................................:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+----------------------------------------------------------------------
+Ran 64 tests in 0.034s
+
+OK
+TOTAL COMMITS: 5
+TOTAL UNIT TESTS EXPECTED: 64
+PASS: STEP06 completed
+Failed: False
+

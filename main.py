@@ -4,6 +4,7 @@ import sys
 
 from quiz import Quiz
 from quiz_game import QuizGame
+from storage import QuizStorage
 
 
 LINE = "=" * 58
@@ -19,6 +20,7 @@ def read_text(prompt):
     """Read a non-empty string."""
 
     while True:
+
         value = input(prompt).strip()
 
         if value:
@@ -31,6 +33,7 @@ def read_int(prompt, minimum, maximum):
     """Read an integer within the allowed range."""
 
     while True:
+
         value = input(prompt).strip()
 
         try:
@@ -47,6 +50,28 @@ def read_int(prompt, minimum, maximum):
             f"{minimum}~{maximum} 사이의 "
             "숫자를 입력하세요."
         )
+
+
+def save_state(game, storage):
+    """Save the current state and report failures."""
+
+    if storage is None:
+        return True
+
+    try:
+
+        storage.save(game)
+
+        print("데이터 저장 완료: state.json")
+
+        return True
+
+    except (OSError, ValueError, RuntimeError) as error:
+
+        print(f"저장 실패: {error}")
+        print("현재 실행 중인 데이터는 메모리에 유지됩니다.")
+
+        return False
 
 
 def show_menu(game):
@@ -170,7 +195,7 @@ def show_result(result):
     print(LINE)
 
 
-def play_quiz(game):
+def play_quiz(game, storage=None):
     """Run an interactive quiz session."""
 
     available = len(game.list_quizzes())
@@ -219,6 +244,7 @@ def play_quiz(game):
                 return
 
             try:
+
                 answer = int(value)
 
                 result = game.submit_answer(
@@ -226,14 +252,17 @@ def play_quiz(game):
                 )
 
             except ValueError:
+
                 print("1~4, H 또는 Q를 입력하세요.")
                 continue
 
             if result["correct"]:
+
                 print(
                     f"정답입니다! "
                     f"+{result['points']}점"
                 )
+
             else:
                 print("오답입니다. +0점")
 
@@ -251,8 +280,10 @@ def play_quiz(game):
 
     show_result(game.get_result())
 
+    save_state(game, storage)
 
-def add_question(game):
+
+def add_question(game, storage=None):
     """Read and register a new question."""
 
     print()
@@ -322,10 +353,13 @@ def add_question(game):
 
     print()
     print(f"문제 등록 완료! ID: {quiz_id}")
+
     print(
         f"전체 등록 문제: "
         f"{len(game.list_quizzes())}개"
     )
+
+    save_state(game, storage)
 
 
 def list_questions(game):
@@ -365,9 +399,11 @@ def show_score(game):
     print(LINE)
 
     if game.best_score is None:
+
         print("아직 완료된 게임 기록이 없습니다.")
 
     else:
+
         print(
             f"최고 점수: "
             f"{game.best_score:.1f} / 100점"
@@ -376,14 +412,14 @@ def show_score(game):
     print(LINE)
 
 
-def run_menu(game):
+def run_menu(game, storage=None):
     """Run the main menu until the user exits."""
 
     actions = {
-        1: play_quiz,
-        2: add_question,
-        3: list_questions,
-        4: show_score,
+        1: lambda: play_quiz(game, storage),
+        2: lambda: add_question(game, storage),
+        3: lambda: list_questions(game),
+        4: lambda: show_score(game),
     }
 
     try:
@@ -399,11 +435,23 @@ def run_menu(game):
             )
 
             if choice == 0:
+
+                if not save_state(game, storage):
+
+                    print(
+                        "저장하지 못했습니다. "
+                        "메뉴에서 다시 종료를 시도하세요."
+                    )
+
+                    continue
+
                 print("프로그램을 종료합니다.")
-                return
+
+                return 0
 
             try:
-                actions[choice](game)
+
+                actions[choice]()
 
             except (ValueError, RuntimeError) as error:
 
@@ -417,29 +465,49 @@ def run_menu(game):
 
         print()
         print("입력이 중단되었습니다.")
-        print("프로그램을 안전하게 종료합니다.")
+
+        if save_state(game, storage):
+
+            print("프로그램을 안전하게 종료합니다.")
+
+            return 0
+
+        print("저장 실패 상태로 프로그램을 종료합니다.")
+
+        return 1
 
 
 def main():
-    """Initialize the game and launch the menu."""
+    """Load persistent state and launch the menu."""
 
-    game = QuizGame()
+    storage = QuizStorage()
 
     try:
-        game.load_default_quizzes()
+
+        game = storage.load()
 
     except (OSError, ValueError) as error:
 
         print(
-            f"기본 퀴즈를 불러올 수 없습니다: "
+            f"퀴즈 데이터를 불러올 수 없습니다: "
             f"{error}"
         )
 
         return 1
 
-    run_menu(game)
+    if storage.last_warning:
 
-    return 0
+        print(f"경고: {storage.last_warning}")
+
+    print(
+        f"퀴즈 데이터 로드 완료: "
+        f"{len(game.list_quizzes())}개"
+    )
+
+    if not save_state(game, storage):
+        return 1
+
+    return run_menu(game, storage)
 
 
 if __name__ == "__main__":
