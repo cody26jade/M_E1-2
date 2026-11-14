@@ -1,0 +1,1311 @@
+CODYSSEY MISSION REPORT SYSTEM
+M_E1-2 STEP05 - QuizGame Class Development
+Date: 2026-11-14 22:34:30
+
+01. Verify Previous Stage
+
+> $required = @(
+        "quiz.py",
+        "tests/test_quiz.py",
+        "data/default_quizzes.json",
+        "logs/03_quiz_dataset_creation.txt"
+    )
+
+    foreach ($file in $required) {
+
+        if (-not (Test-Path -LiteralPath $file)) {
+            throw "Missing required file: $file"
+        }
+
+        "READY: $file"
+    }
+
+    $count = git rev-list --count HEAD
+
+    if ($LASTEXITCODE -ne 0 -or $count -ne "2") {
+        throw "Expected two previous Git commits."
+    }
+
+    $status = @(git status --porcelain)
+
+    if ($LASTEXITCODE -ne 0 -or $status.Count -gt 0) {
+        throw "Working tree is not clean."
+    }
+
+    python -m unittest discover -s tests -p "test_quiz.py" 2>&1
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Previous Quiz tests failed."
+    }
+
+    "PASS: Previous stage verified"
+READY: quiz.py
+READY: tests/test_quiz.py
+READY: data/default_quizzes.json
+READY: logs/03_quiz_dataset_creation.txt
+python : ....................
+위치 줄:35 문자:5
++     python -m unittest discover -s tests -p "test_quiz.py" 2>&1
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (....................:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+----------------------------------------------------------------------
+Ran 20 tests in 0.001s
+
+OK
+PASS: Previous stage verified
+Failed: False
+
+02. Save STEP04 Execution Evidence
+
+> $source = Get-ChildItem "C:\2026Codyssey_AllInOne\_Common\logs" -File |
+        Where-Object {
+            $_.Name -like "*M_E1-2*STEP04*Quiz*Class*Development*"
+        } |
+        Sort-Object LastWriteTime -Descending |
+        Select-Object -First 1
+
+    if (-not $source) {
+        throw "STEP04 execution log not found."
+    }
+
+    $content = Get-Content `
+        -LiteralPath $source.FullName `
+        -Raw `
+        -Encoding UTF8
+
+    if ($content -match '(?m)^Failed:\s*True\s*$') {
+        throw "STEP04 contains failed steps."
+    }
+
+    $results = [regex]::Matches(
+        $content,
+        '(?m)^Failed:\s*False\s*$'
+    )
+
+    if ($results.Count -ne 9) {
+        throw "Expected nine successful STEP04 results."
+    }
+
+    $content = $content -replace `
+        '(?i)([A-Z]:\\Users\\)[^\\\r\n]+(?=\\)', `
+        '${1}<USER>'
+
+    $path = Join-Path `
+        (Get-Location).Path `
+        "logs\04_quiz_class_development.txt"
+
+    $utf8 = New-Object System.Text.UTF8Encoding($false)
+
+    [System.IO.File]::WriteAllText(
+        $path,
+        $content,
+        $utf8
+    )
+
+    "PASS: STEP04 actual execution evidence saved"
+PASS: STEP04 actual execution evidence saved
+Failed: False
+
+03. Create QuizGame Class
+
+> $path = Join-Path (Get-Location).Path "quiz_game.py"
+
+    if (Test-Path -LiteralPath $path) {
+        throw "quiz_game.py already exists. Review required."
+    }
+
+    $content = @'
+"""Quiz game engine for machine tool and vibration quizzes."""
+
+import json
+import random
+from pathlib import Path
+
+from quiz import Quiz
+
+
+class QuizGame:
+    """Manage quiz questions, game sessions and scores."""
+
+    FULL_POINTS = 10
+    HINT_POINTS = 5
+
+    def __init__(self, quizzes=None, rng=None):
+        self.quizzes = []
+        self.best_score = None
+
+        self._rng = (
+            rng if rng is not None else random.Random()
+        )
+
+        self._session = []
+        self._index = 0
+        self._hint_used = False
+        self._active = False
+        self._answers = []
+        self._last_result = None
+
+        if quizzes is not None:
+            for quiz in quizzes:
+                self.add_quiz(quiz)
+
+    @property
+    def is_active(self):
+        """Return whether a game is in progress."""
+
+        return self._active
+
+    @property
+    def current_quiz(self):
+        """Return the current question or None."""
+
+        if not self._active:
+            return None
+
+        return self._session[self._index]
+
+    @property
+    def question_number(self):
+        """Return the current question number."""
+
+        if not self._active:
+            return 0
+
+        return self._index + 1
+
+    @property
+    def total_questions(self):
+        """Return the number of questions in the session."""
+
+        return len(self._session)
+
+    @property
+    def hint_used(self):
+        """Return whether the current hint has been used."""
+
+        return self._hint_used
+
+    def _require_inactive(self):
+        """Prevent question changes during a game."""
+
+        if self._active:
+            raise RuntimeError(
+                "게임 진행 중에는 문제를 변경할 수 없습니다."
+            )
+
+    def _require_active(self):
+        """Require an active game session."""
+
+        if not self._active:
+            raise RuntimeError(
+                "진행 중인 게임이 없습니다."
+            )
+
+    def load_default_quizzes(self, path=None):
+        """Load and validate the default quiz dataset."""
+
+        self._require_inactive()
+
+        if path is None:
+            path = (
+                Path(__file__).resolve().parent
+                / "data"
+                / "default_quizzes.json"
+            )
+
+        path = Path(path)
+
+        data = json.loads(
+            path.read_text(encoding="utf-8")
+        )
+
+        if not isinstance(data, list):
+            raise ValueError(
+                "퀴즈 데이터는 리스트여야 합니다."
+            )
+
+        loaded = []
+        ids = set()
+        questions = set()
+
+        for item in data:
+            quiz = Quiz.from_dict(item)
+
+            if quiz.id in ids:
+                raise ValueError(
+                    "중복된 문제 번호가 있습니다."
+                )
+
+            key = quiz.question.strip().casefold()
+
+            if key in questions:
+                raise ValueError(
+                    "중복된 문제가 있습니다."
+                )
+
+            ids.add(quiz.id)
+            questions.add(key)
+            loaded.append(quiz)
+
+        self.quizzes = loaded
+
+        return len(self.quizzes)
+
+    def add_quiz(self, quiz):
+        """Add a validated and independent quiz object."""
+
+        self._require_inactive()
+
+        if not isinstance(quiz, Quiz):
+            raise TypeError(
+                "Quiz 객체만 등록할 수 있습니다."
+            )
+
+        quiz.validate()
+
+        if any(q.id == quiz.id for q in self.quizzes):
+            raise ValueError(
+                "이미 존재하는 문제 번호입니다."
+            )
+
+        key = quiz.question.strip().casefold()
+
+        if any(
+            q.question.strip().casefold() == key
+            for q in self.quizzes
+        ):
+            raise ValueError(
+                "이미 등록된 문제입니다."
+            )
+
+        self.quizzes.append(
+            Quiz.from_dict(quiz.to_dict())
+        )
+
+        return quiz.id
+
+    def next_quiz_id(self):
+        """Return the next available quiz ID."""
+
+        return max(
+            (quiz.id for quiz in self.quizzes),
+            default=0,
+        ) + 1
+
+    def list_quizzes(self, difficulty=None):
+        """Return copies of the registered quiz questions."""
+
+        if difficulty not in (
+            None,
+            "beginner",
+            "intermediate",
+        ):
+            raise ValueError(
+                "지원하지 않는 난이도입니다."
+            )
+
+        selected = [
+            quiz
+            for quiz in self.quizzes
+            if difficulty is None
+            or quiz.difficulty == difficulty
+        ]
+
+        return [
+            Quiz.from_dict(quiz.to_dict())
+            for quiz in selected
+        ]
+
+    def start_game(
+        self,
+        count=None,
+        difficulty=None,
+        random_order=True,
+        shuffle_choices=True,
+    ):
+        """Create a new game session."""
+
+        self._require_inactive()
+
+        available = self.list_quizzes(difficulty)
+
+        if not available:
+            raise ValueError(
+                "출제할 문제가 없습니다."
+            )
+
+        if count is None:
+            count = len(available)
+
+        if type(count) is not int:
+            raise ValueError(
+                "문제 수는 정수여야 합니다."
+            )
+
+        if not 1 <= count <= len(available):
+            raise ValueError(
+                f"문제 수는 1~{len(available)}개여야 합니다."
+            )
+
+        if random_order:
+            selected = self._rng.sample(
+                available,
+                count,
+            )
+        else:
+            selected = available[:count]
+
+        if shuffle_choices:
+            selected = [
+                quiz.shuffled(self._rng)
+                for quiz in selected
+            ]
+
+        self._session = selected
+        self._index = 0
+        self._hint_used = False
+        self._answers = []
+        self._last_result = None
+        self._active = True
+
+        return self.total_questions
+
+    def use_hint(self):
+        """Reveal the current hint and mark the deduction."""
+
+        self._require_active()
+
+        self._hint_used = True
+
+        return self.current_quiz.get_hint()
+
+    def submit_answer(self, user_answer):
+        """Check an answer and advance the game."""
+
+        self._require_active()
+
+        quiz = self.current_quiz
+
+        correct = quiz.check_answer(user_answer)
+
+        if correct:
+            points = (
+                self.HINT_POINTS
+                if self._hint_used
+                else self.FULL_POINTS
+            )
+        else:
+            points = 0
+
+        answer_result = {
+            "quiz_id": quiz.id,
+            "question": quiz.question,
+            "selected_answer": user_answer,
+            "correct_answer": quiz.answer,
+            "correct_choice": quiz.get_correct_choice(),
+            "correct": correct,
+            "hint_used": self._hint_used,
+            "points": points,
+            "explanation": quiz.get_explanation(),
+        }
+
+        self._answers.append(answer_result)
+
+        self._index += 1
+        self._hint_used = False
+
+        if self._index >= len(self._session):
+            self._finish_game()
+
+        return answer_result.copy()
+
+    def _finish_game(self):
+        """Calculate the completed session result."""
+
+        total = len(self._session)
+
+        correct = sum(
+            answer["correct"]
+            for answer in self._answers
+        )
+
+        hints = sum(
+            answer["hint_used"]
+            for answer in self._answers
+        )
+
+        points = sum(
+            answer["points"]
+            for answer in self._answers
+        )
+
+        max_points = total * self.FULL_POINTS
+
+        score = round(
+            points / max_points * 100,
+            1,
+        )
+
+        accuracy = round(
+            correct / total * 100,
+            1,
+        )
+
+        new_best = (
+            self.best_score is None
+            or score > self.best_score
+        )
+
+        if new_best:
+            self.best_score = score
+
+        self._last_result = {
+            "total_questions": total,
+            "correct_count": correct,
+            "wrong_count": total - correct,
+            "hint_count": hints,
+            "earned_points": points,
+            "max_points": max_points,
+            "score": score,
+            "accuracy": accuracy,
+            "best_score": self.best_score,
+            "new_best": new_best,
+            "answers": [
+                answer.copy()
+                for answer in self._answers
+            ],
+        }
+
+        self._active = False
+
+    def get_result(self):
+        """Return a copy of the latest completed result."""
+
+        if self._last_result is None:
+            return None
+
+        result = self._last_result.copy()
+
+        result["answers"] = [
+            answer.copy()
+            for answer in self._last_result["answers"]
+        ]
+
+        return result
+
+    def cancel_game(self):
+        """Cancel an incomplete game without scoring it."""
+
+        if not self._active:
+            return False
+
+        self._session = []
+        self._index = 0
+        self._hint_used = False
+        self._answers = []
+        self._last_result = None
+        self._active = False
+
+        return True
+'@
+
+    $utf8 = New-Object System.Text.UTF8Encoding($false)
+
+    [System.IO.File]::WriteAllText(
+        $path,
+        $content.TrimEnd() + "`n",
+        $utf8
+    )
+
+    Get-Item -LiteralPath $path |
+        Select-Object Name, Length
+
+    "PASS: QuizGame class created"
+
+Name         Length
+----         ------
+quiz_game.py   9320
+PASS: QuizGame class created
+Failed: False
+
+04. Create QuizGame Unit Tests
+
+> $path = Join-Path `
+        (Get-Location).Path `
+        "tests\test_quiz_game.py"
+
+    if (Test-Path -LiteralPath $path) {
+        throw "test_quiz_game.py already exists. Review required."
+    }
+
+    $content = @'
+"""Unit tests for the QuizGame engine."""
+
+import json
+import random
+import tempfile
+import unittest
+from pathlib import Path
+
+from quiz import Quiz
+from quiz_game import QuizGame
+
+
+class TestQuizGame(unittest.TestCase):
+
+    def setUp(self):
+        self.game = QuizGame(
+            rng=random.Random(42)
+        )
+
+        self.game.load_default_quizzes()
+
+    def start(self, count=3):
+        self.game.start_game(
+            count=count,
+            random_order=False,
+            shuffle_choices=False,
+        )
+
+    def correct_answer(self):
+        return self.game.submit_answer(
+            self.game.current_quiz.answer
+        )
+
+    def wrong_answer(self):
+        answer = self.game.current_quiz.answer
+        wrong = answer % 4 + 1
+
+        return self.game.submit_answer(wrong)
+
+    def test_01_default_question_count(self):
+        self.assertEqual(
+            len(self.game.list_quizzes()),
+            20,
+        )
+
+    def test_02_difficulty_filter(self):
+        self.assertEqual(
+            len(self.game.list_quizzes("beginner")),
+            10,
+        )
+
+        self.assertEqual(
+            len(self.game.list_quizzes("intermediate")),
+            10,
+        )
+
+    def test_03_add_quiz(self):
+        data = self.game.list_quizzes()[0].to_dict()
+
+        data["id"] = 21
+        data["question"] = "New test question"
+
+        quiz = Quiz.from_dict(data)
+
+        self.assertEqual(
+            self.game.add_quiz(quiz),
+            21,
+        )
+
+        self.assertEqual(
+            len(self.game.list_quizzes()),
+            21,
+        )
+
+    def test_04_duplicate_id(self):
+        quiz = self.game.list_quizzes()[0]
+
+        with self.assertRaises(ValueError):
+            self.game.add_quiz(quiz)
+
+    def test_05_duplicate_question(self):
+        data = self.game.list_quizzes()[0].to_dict()
+        data["id"] = 21
+
+        with self.assertRaises(ValueError):
+            self.game.add_quiz(
+                Quiz.from_dict(data)
+            )
+
+    def test_06_next_id(self):
+        self.assertEqual(
+            self.game.next_quiz_id(),
+            21,
+        )
+
+    def test_07_start_game(self):
+        self.start(5)
+
+        self.assertTrue(self.game.is_active)
+
+        self.assertEqual(
+            self.game.total_questions,
+            5,
+        )
+
+        self.assertEqual(
+            self.game.question_number,
+            1,
+        )
+
+    def test_08_invalid_count(self):
+        for count in (0, -1, 21, True, "5"):
+
+            with self.subTest(count=count):
+
+                with self.assertRaises(ValueError):
+                    self.game.start_game(count=count)
+
+    def test_09_empty_question_bank(self):
+        game = QuizGame()
+
+        with self.assertRaises(ValueError):
+            game.start_game()
+
+    def test_10_correct_answer_points(self):
+        self.start(1)
+
+        result = self.correct_answer()
+
+        self.assertTrue(result["correct"])
+        self.assertEqual(result["points"], 10)
+
+    def test_11_wrong_answer_points(self):
+        self.start(1)
+
+        result = self.wrong_answer()
+
+        self.assertFalse(result["correct"])
+        self.assertEqual(result["points"], 0)
+
+    def test_12_hint_points(self):
+        self.start(1)
+
+        self.game.use_hint()
+
+        result = self.correct_answer()
+
+        self.assertTrue(result["hint_used"])
+        self.assertEqual(result["points"], 5)
+
+    def test_13_repeated_hint(self):
+        self.start(1)
+
+        first = self.game.use_hint()
+        second = self.game.use_hint()
+
+        self.assertEqual(first, second)
+
+        result = self.correct_answer()
+
+        self.assertEqual(result["points"], 5)
+
+    def test_14_hint_with_wrong_answer(self):
+        self.start(1)
+
+        self.game.use_hint()
+
+        result = self.wrong_answer()
+
+        self.assertEqual(result["points"], 0)
+
+    def test_15_invalid_answer_does_not_advance(self):
+        self.start(2)
+
+        with self.assertRaises(ValueError):
+            self.game.submit_answer(5)
+
+        self.assertEqual(
+            self.game.question_number,
+            1,
+        )
+
+    def test_16_advance_question(self):
+        self.start(2)
+
+        self.correct_answer()
+
+        self.assertEqual(
+            self.game.question_number,
+            2,
+        )
+
+    def test_17_normalized_score(self):
+        self.start(3)
+
+        self.correct_answer()
+
+        self.game.use_hint()
+        self.correct_answer()
+
+        self.wrong_answer()
+
+        result = self.game.get_result()
+
+        self.assertEqual(result["earned_points"], 15)
+        self.assertEqual(result["max_points"], 30)
+        self.assertEqual(result["score"], 50.0)
+        self.assertEqual(result["accuracy"], 66.7)
+        self.assertEqual(result["correct_count"], 2)
+        self.assertEqual(result["wrong_count"], 1)
+        self.assertEqual(result["hint_count"], 1)
+
+    def test_18_best_score(self):
+        self.start(1)
+        self.correct_answer()
+
+        self.assertEqual(
+            self.game.best_score,
+            100.0,
+        )
+
+        self.start(1)
+        self.wrong_answer()
+
+        self.assertEqual(
+            self.game.best_score,
+            100.0,
+        )
+
+        self.assertFalse(
+            self.game.get_result()["new_best"]
+        )
+
+    def test_19_cancel_game(self):
+        self.start(2)
+
+        self.correct_answer()
+
+        self.assertTrue(self.game.cancel_game())
+
+        self.assertFalse(self.game.is_active)
+        self.assertIsNone(self.game.get_result())
+        self.assertIsNone(self.game.best_score)
+
+    def test_20_completed_game_state(self):
+        self.start(1)
+
+        self.correct_answer()
+
+        self.assertFalse(self.game.is_active)
+        self.assertIsNone(self.game.current_quiz)
+        self.assertIsNotNone(self.game.get_result())
+
+    def test_21_no_active_game(self):
+        with self.assertRaises(RuntimeError):
+            self.game.submit_answer(1)
+
+        with self.assertRaises(RuntimeError):
+            self.game.use_hint()
+
+    def test_22_random_unique_questions(self):
+        self.game.start_game(
+            count=10,
+            random_order=True,
+            shuffle_choices=True,
+        )
+
+        ids = []
+
+        while self.game.is_active:
+
+            ids.append(
+                self.game.current_quiz.id
+            )
+
+            self.correct_answer()
+
+        self.assertEqual(len(ids), 10)
+        self.assertEqual(len(set(ids)), 10)
+
+        self.assertEqual(
+            self.game.get_result()["score"],
+            100.0,
+        )
+
+    def test_23_question_bank_unchanged(self):
+        original = [
+            q.to_dict()
+            for q in self.game.list_quizzes()
+        ]
+
+        self.game.start_game(count=5)
+
+        while self.game.is_active:
+            self.correct_answer()
+
+        after = [
+            q.to_dict()
+            for q in self.game.list_quizzes()
+        ]
+
+        self.assertEqual(original, after)
+
+    def test_24_invalid_json_preserves_bank(self):
+        with tempfile.TemporaryDirectory() as directory:
+
+            path = Path(directory) / "invalid.json"
+
+            path.write_text(
+                "{invalid json",
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(json.JSONDecodeError):
+                self.game.load_default_quizzes(path)
+
+        self.assertEqual(
+            len(self.game.list_quizzes()),
+            20,
+        )
+
+    def test_25_prevent_changes_during_game(self):
+        self.start(2)
+
+        with self.assertRaises(RuntimeError):
+            self.game.start_game()
+
+        with self.assertRaises(RuntimeError):
+            self.game.add_quiz(
+                self.game.list_quizzes()[0]
+            )
+
+        with self.assertRaises(RuntimeError):
+            self.game.load_default_quizzes()
+
+    def test_26_result_is_independent(self):
+        self.start(1)
+        self.correct_answer()
+
+        result = self.game.get_result()
+
+        result["score"] = -100
+        result["answers"][0]["points"] = -100
+
+        original = self.game.get_result()
+
+        self.assertEqual(original["score"], 100.0)
+
+        self.assertEqual(
+            original["answers"][0]["points"],
+            10,
+        )
+
+    def test_27_zero_score_is_valid(self):
+        self.start(1)
+        self.wrong_answer()
+
+        self.assertEqual(
+            self.game.best_score,
+            0.0,
+        )
+
+        self.assertTrue(
+            self.game.get_result()["new_best"]
+        )
+
+    def test_28_hint_resets_next_question(self):
+        self.start(2)
+
+        self.game.use_hint()
+        self.correct_answer()
+
+        self.assertFalse(self.game.hint_used)
+
+        result = self.correct_answer()
+
+        self.assertEqual(result["points"], 10)
+
+
+if __name__ == "__main__":
+    unittest.main()
+'@
+
+    $utf8 = New-Object System.Text.UTF8Encoding($false)
+
+    [System.IO.File]::WriteAllText(
+        $path,
+        $content.TrimEnd() + "`n",
+        $utf8
+    )
+
+    Get-Item -LiteralPath $path |
+        Select-Object Name, Length
+
+    "PASS: Twenty-eight QuizGame tests created"
+
+Name              Length
+----              ------
+test_quiz_game.py   8786
+PASS: Twenty-eight QuizGame tests created
+Failed: False
+
+05. Verify Python Syntax
+
+> python -m py_compile `
+        quiz.py `
+        quiz_game.py `
+        tests/test_quiz.py `
+        tests/test_quiz_game.py
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Python syntax verification failed."
+    }
+
+    "PASS: Python syntax verified"
+PASS: Python syntax verified
+Failed: False
+
+06. Run All Forty-Eight Unit Tests
+
+> python -m unittest discover -s tests -v 2>&1
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Unit tests failed."
+    }
+
+    "PASS: All Quiz and QuizGame unit tests completed"
+python : test_01_create_object (test_quiz.TestQuiz.test_01_create_object) ... ok
+위치 줄:936 문자:5
++     python -m unittest discover -s tests -v 2>&1
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (test_01_create_..._object) ... ok:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+test_02_correct_answer (test_quiz.TestQuiz.test_02_correct_answer) ... ok
+test_03_wrong_answer (test_quiz.TestQuiz.test_03_wrong_answer) ... ok
+test_04_invalid_answer_range (test_quiz.TestQuiz.test_04_invalid_answer_range) ... ok
+test_05_invalid_answer_type (test_quiz.TestQuiz.test_05_invalid_answer_type) ... ok
+test_06_get_hint (test_quiz.TestQuiz.test_06_get_hint) ... ok
+test_07_get_explanation (test_quiz.TestQuiz.test_07_get_explanation) ... ok
+test_08_correct_choice (test_quiz.TestQuiz.test_08_correct_choice) ... ok
+test_09_to_dict (test_quiz.TestQuiz.test_09_to_dict) ... ok
+test_10_round_trip (test_quiz.TestQuiz.test_10_round_trip) ... ok
+test_11_missing_field (test_quiz.TestQuiz.test_11_missing_field) ... ok
+test_12_invalid_choice_count (test_quiz.TestQuiz.test_12_invalid_choice_count) ... ok
+test_13_duplicate_choices (test_quiz.TestQuiz.test_13_duplicate_choices) ... ok
+test_14_invalid_difficulty (test_quiz.TestQuiz.test_14_invalid_difficulty) ... ok
+test_15_empty_question (test_quiz.TestQuiz.test_15_empty_question) ... ok
+test_16_invalid_correct_answer (test_quiz.TestQuiz.test_16_invalid_correct_answer) ... ok
+test_17_shuffle_preserves_answer (test_quiz.TestQuiz.test_17_shuffle_preserves_answer) ... ok
+test_18_shuffle_preserves_original (test_quiz.TestQuiz.test_18_shuffle_preserves_original) ... ok
+test_19_load_all_default_questions (test_quiz.TestQuiz.test_19_load_all_default_questions) ... ok
+test_20_independent_choice_lists (test_quiz.TestQuiz.test_20_independent_choice_lists) ... ok
+test_01_default_question_count (test_quiz_game.TestQuizGame.test_01_default_question_count) ... ok
+test_02_difficulty_filter (test_quiz_game.TestQuizGame.test_02_difficulty_filter) ... ok
+test_03_add_quiz (test_quiz_game.TestQuizGame.test_03_add_quiz) ... ok
+test_04_duplicate_id (test_quiz_game.TestQuizGame.test_04_duplicate_id) ... ok
+test_05_duplicate_question (test_quiz_game.TestQuizGame.test_05_duplicate_question) ... ok
+test_06_next_id (test_quiz_game.TestQuizGame.test_06_next_id) ... ok
+test_07_start_game (test_quiz_game.TestQuizGame.test_07_start_game) ... ok
+test_08_invalid_count (test_quiz_game.TestQuizGame.test_08_invalid_count) ... ok
+test_09_empty_question_bank (test_quiz_game.TestQuizGame.test_09_empty_question_bank) ... ok
+test_10_correct_answer_points (test_quiz_game.TestQuizGame.test_10_correct_answer_points) ... ok
+test_11_wrong_answer_points (test_quiz_game.TestQuizGame.test_11_wrong_answer_points) ... ok
+test_12_hint_points (test_quiz_game.TestQuizGame.test_12_hint_points) ... ok
+test_13_repeated_hint (test_quiz_game.TestQuizGame.test_13_repeated_hint) ... ok
+test_14_hint_with_wrong_answer (test_quiz_game.TestQuizGame.test_14_hint_with_wrong_answer) ... ok
+test_15_invalid_answer_does_not_advance (test_quiz_game.TestQuizGame.test_15_invalid_answer_does_not_advance) ... ok
+test_16_advance_question (test_quiz_game.TestQuizGame.test_16_advance_question) ... ok
+test_17_normalized_score (test_quiz_game.TestQuizGame.test_17_normalized_score) ... ok
+test_18_best_score (test_quiz_game.TestQuizGame.test_18_best_score) ... ok
+test_19_cancel_game (test_quiz_game.TestQuizGame.test_19_cancel_game) ... ok
+test_20_completed_game_state (test_quiz_game.TestQuizGame.test_20_completed_game_state) ... ok
+test_21_no_active_game (test_quiz_game.TestQuizGame.test_21_no_active_game) ... ok
+test_22_random_unique_questions (test_quiz_game.TestQuizGame.test_22_random_unique_questions) ... ok
+test_23_question_bank_unchanged (test_quiz_game.TestQuizGame.test_23_question_bank_unchanged) ... ok
+test_24_invalid_json_preserves_bank (test_quiz_game.TestQuizGame.test_24_invalid_json_preserves_bank) ... ok
+test_25_prevent_changes_during_game (test_quiz_game.TestQuizGame.test_25_prevent_changes_during_game) ... ok
+test_26_result_is_independent (test_quiz_game.TestQuizGame.test_26_result_is_independent) ... ok
+test_27_zero_score_is_valid (test_quiz_game.TestQuizGame.test_27_zero_score_is_valid) ... ok
+test_28_hint_resets_next_question (test_quiz_game.TestQuizGame.test_28_hint_resets_next_question) ... ok
+
+----------------------------------------------------------------------
+Ran 48 tests in 0.026s
+
+OK
+PASS: All Quiz and QuizGame unit tests completed
+Failed: False
+
+07. Run Actual Game Simulation
+
+> $code = @'
+import random
+
+from quiz_game import QuizGame
+
+game = QuizGame(
+    rng=random.Random(42)
+)
+
+loaded = game.load_default_quizzes()
+
+print("LOADED QUESTIONS:", loaded)
+
+game.start_game(
+    count=5,
+    random_order=False,
+    shuffle_choices=False,
+)
+
+for index in range(5):
+
+    quiz = game.current_quiz
+
+    if index == 2:
+        game.use_hint()
+
+    if index == 3:
+        answer = quiz.answer % 4 + 1
+    else:
+        answer = quiz.answer
+
+    result = game.submit_answer(answer)
+
+    print(
+        f"QUESTION {index + 1}: "
+        f"ID={result['quiz_id']} | "
+        f"CORRECT={result['correct']} | "
+        f"HINT={result['hint_used']} | "
+        f"POINTS={result['points']}"
+    )
+
+result = game.get_result()
+
+print()
+print("===== FINAL GAME RESULT =====")
+print("TOTAL QUESTIONS:", result["total_questions"])
+print("CORRECT:", result["correct_count"])
+print("WRONG:", result["wrong_count"])
+print("HINTS USED:", result["hint_count"])
+print("EARNED POINTS:", result["earned_points"])
+print("MAX POINTS:", result["max_points"])
+print("NORMALIZED SCORE:", result["score"])
+print("ACCURACY:", result["accuracy"])
+print("BEST SCORE:", result["best_score"])
+
+assert result["total_questions"] == 5
+assert result["correct_count"] == 4
+assert result["wrong_count"] == 1
+assert result["hint_count"] == 1
+assert result["earned_points"] == 35
+assert result["score"] == 70.0
+assert result["accuracy"] == 80.0
+assert result["best_score"] == 70.0
+
+print("PASS: Actual game simulation completed")
+'@
+
+    $code | python -
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Game simulation failed."
+    }
+LOADED QUESTIONS: 20
+QUESTION 1: ID=1 | CORRECT=True | HINT=False | POINTS=10
+QUESTION 2: ID=2 | CORRECT=True | HINT=False | POINTS=10
+QUESTION 3: ID=3 | CORRECT=True | HINT=True | POINTS=5
+QUESTION 4: ID=4 | CORRECT=False | HINT=False | POINTS=0
+QUESTION 5: ID=5 | CORRECT=True | HINT=False | POINTS=10
+
+===== FINAL GAME RESULT =====
+TOTAL QUESTIONS: 5
+CORRECT: 4
+WRONG: 1
+HINTS USED: 1
+EARNED POINTS: 35
+MAX POINTS: 50
+NORMALIZED SCORE: 70.0
+ACCURACY: 80.0
+BEST SCORE: 70.0
+PASS: Actual game simulation completed
+Failed: False
+
+08. Create Third Git Commit
+
+> $files = @(
+        "quiz_game.py",
+        "tests/test_quiz_game.py",
+        "logs/04_quiz_class_development.txt"
+    )
+
+    foreach ($file in $files) {
+
+        if (-not (Test-Path -LiteralPath $file -PathType Leaf)) {
+            throw "Missing required file: $file"
+        }
+    }
+
+    $count = git rev-list --count HEAD
+
+    if ($LASTEXITCODE -ne 0 -or $count -ne "2") {
+        throw "Unexpected previous commit count."
+    }
+
+    $code = @'
+import unittest
+
+suite = unittest.defaultTestLoader.discover("tests")
+
+count = suite.countTestCases()
+
+print("DISCOVERED TESTS:", count)
+
+if count != 48:
+    raise SystemExit("Expected 48 tests.")
+
+result = unittest.TextTestRunner(
+    verbosity=1
+).run(suite)
+
+raise SystemExit(
+    0 if result.wasSuccessful() else 1
+)
+'@
+
+    $code | python - 2>&1
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Pre-commit tests failed."
+    }
+
+    $author = git var GIT_AUTHOR_IDENT
+
+    if ($LASTEXITCODE -ne 0 -or
+        $author -notmatch '<\d+\+cody26jade@users\.noreply\.github\.com>') {
+
+        throw "Git author email privacy verification failed."
+    }
+
+    $committer = git var GIT_COMMITTER_IDENT
+
+    if ($LASTEXITCODE -ne 0 -or
+        $committer -notmatch '<\d+\+cody26jade@users\.noreply\.github\.com>') {
+
+        throw "Git committer email privacy verification failed."
+    }
+
+    foreach ($file in $files) {
+
+        $text = Get-Content `
+            -LiteralPath $file `
+            -Raw `
+            -Encoding UTF8
+
+        if ($text -match 'github_pat_[A-Za-z0-9_]+|gh[pousr]_[A-Za-z0-9]+|sk-[A-Za-z0-9_-]{15,}|-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----') {
+
+            throw "Sensitive pattern detected in $file"
+        }
+    }
+
+    "PASS: Git identity and sensitive pattern checks"
+
+    git add -- $files
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Git add failed."
+    }
+
+    $staged = @(git diff --cached --name-only)
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Staging verification failed."
+    }
+
+    $difference = @(
+        Compare-Object `
+            -ReferenceObject $files `
+            -DifferenceObject $staged
+    )
+
+    if ($difference.Count -gt 0) {
+        throw "Unexpected staged files."
+    }
+
+    git diff --cached --stat
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Git diff failed."
+    }
+
+    git commit -m "Implement QuizGame engine and scoring tests"
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Git commit failed."
+    }
+
+    "PASS: Third Git commit created"
+python : ................................................
+위치 줄:1063 문자:13
++     $code | python - 2>&1
++             ~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (.................................:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+----------------------------------------------------------------------
+Ran 48 tests in 0.025s
+
+OK
+DISCOVERED TESTS: 48
+PASS: Git identity and sensitive pattern checks
+git : warning: in the working copy of 'logs/04_quiz_class_development.txt', CRLF will be replaced by LF the next time Git touches it
+위치 줄:1100 문자:5
++     git add -- $files
++     ~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (warning: in the... Git touches it:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+ logs/04_quiz_class_development.txt | 799 +++++++++++++++++++++++++++++++++++++
+ quiz_game.py                       | 392 ++++++++++++++++++
+ tests/test_quiz_game.py            | 381 ++++++++++++++++++
+ 3 files changed, 1572 insertions(+)
+[main a49c5db] Implement QuizGame engine and scoring tests
+ 3 files changed, 1572 insertions(+)
+ create mode 100644 logs/04_quiz_class_development.txt
+ create mode 100644 quiz_game.py
+ create mode 100644 tests/test_quiz_game.py
+PASS: Third Git commit created
+Failed: False
+
+09. Verify Final Stage Status
+
+> git log -3 --oneline
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Git history verification failed."
+    }
+
+    $count = git rev-list --count HEAD
+
+    if ($LASTEXITCODE -ne 0 -or $count -ne "3") {
+        throw "Expected three Git commits."
+    }
+
+    "TOTAL COMMITS: $count"
+
+    git status --short --branch
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Git status failed."
+    }
+
+    $status = @(git status --porcelain)
+
+    if ($LASTEXITCODE -ne 0 -or $status.Count -gt 0) {
+        throw "Working tree is not clean."
+    }
+
+    "PASS: Working tree is clean"
+    "PASS: STEP05 completed"
+a49c5db Implement QuizGame engine and scoring tests
+ccc8cb6 Implement Quiz class with validation and unit tests
+f161dea Initialize quiz project and add 20 default questions
+TOTAL COMMITS: 3
+## main
+PASS: Working tree is clean
+PASS: STEP05 completed
+Failed: False
+
