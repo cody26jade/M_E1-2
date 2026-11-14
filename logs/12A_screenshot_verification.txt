@@ -1,0 +1,236 @@
+CODYSSEY MISSION REPORT SYSTEM
+M_E1-2 STEP12A - Screenshot Evidence Verification
+Date: 2026-11-14 23:52:11
+
+01. Verify Screenshot Files
+
+> $files = @(
+        "01_Development_Environment.png",
+        "02_Git_Configuration.png",
+        "03_Quiz_Main_Menu.png",
+        "04_Quiz_Add.png",
+        "05_Quiz_List.png",
+        "06_Quiz_Play.png",
+        "07_Git_History.png",
+        "08_Quiz_Result.png",
+        "09_Quiz_Best_Score.png",
+        "10_Quiz_History.png"
+    )
+
+    $missing = @()
+
+    foreach ($file in $files) {
+
+        $path = Join-Path "screenshots" $file
+
+        if (Test-Path -LiteralPath $path -PathType Leaf) {
+
+            $size = (Get-Item -LiteralPath $path).Length
+
+            if ($size -gt 0) {
+
+                "PASS: $file ($size bytes)"
+
+            } else {
+
+                $missing += $file
+
+                "EMPTY: $file"
+            }
+
+        } else {
+
+            $missing += $file
+
+            "MISSING: $file"
+        }
+    }
+
+    "TOTAL EXPECTED: $($files.Count)"
+    "TOTAL PRESENT : $($files.Count - $missing.Count)"
+
+    if ($missing.Count -gt 0) {
+        throw "Required screenshot files missing or empty."
+    }
+
+    "PASS: All ten screenshot files present"
+PASS: 01_Development_Environment.png (89978 bytes)
+PASS: 02_Git_Configuration.png (16977 bytes)
+PASS: 03_Quiz_Main_Menu.png (12330 bytes)
+PASS: 04_Quiz_Add.png (26922 bytes)
+PASS: 05_Quiz_List.png (40096 bytes)
+PASS: 06_Quiz_Play.png (27748 bytes)
+PASS: 07_Git_History.png (24692 bytes)
+PASS: 08_Quiz_Result.png (21097 bytes)
+PASS: 09_Quiz_Best_Score.png (9733 bytes)
+PASS: 10_Quiz_History.png (13128 bytes)
+TOTAL EXPECTED: 10
+TOTAL PRESENT : 10
+PASS: All ten screenshot files present
+Failed: False
+
+02. Verify PNG Image Format
+
+> $code = @'
+from pathlib import Path
+import struct
+
+files = sorted(Path("screenshots").glob("*.png"))
+
+assert files, "No PNG files found"
+
+for path in files:
+
+    with path.open("rb") as stream:
+        header = stream.read(24)
+
+    assert len(header) == 24, path.name
+
+    assert header[:8] == b"\x89PNG\r\n\x1a\n", path.name
+
+    assert header[12:16] == b"IHDR", path.name
+
+    width, height = struct.unpack(
+        ">II",
+        header[16:24],
+    )
+
+    assert width > 0 and height > 0, path.name
+
+    print(
+        f"PASS: {path.name} "
+        f"({width} x {height})"
+    )
+
+print("PASS: PNG image headers verified")
+'@
+
+    $code | python -
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "PNG verification failed."
+    }
+PASS: 01_Development_Environment.png (845 x 905)
+PASS: 02_Git_Configuration.png (434 x 282)
+PASS: 03_Quiz_Main_Menu.png (441 x 393)
+PASS: 04_Quiz_Add.png (449 x 913)
+PASS: 05_Quiz_List.png (549 x 922)
+PASS: 06_Quiz_Play.png (401 x 825)
+PASS: 07_Git_History.png (592 x 293)
+PASS: 08_Quiz_Result.png (508 x 823)
+PASS: 09_Quiz_Best_Score.png (414 x 368)
+PASS: 10_Quiz_History.png (417 x 435)
+PASS: PNG image headers verified
+Failed: False
+
+03. Verify Original Runtime Data
+
+> if (-not $global:M_E1_2_DemoPath) {
+        throw "Demo session information not found."
+    }
+
+    if ($null -ne $global:M_E1_2_StateHash) {
+
+        if (-not (Test-Path "state.json")) {
+            throw "Original state file missing."
+        }
+
+        $after = (
+            Get-FileHash state.json -Algorithm SHA256
+        ).Hash
+
+        "BEFORE: $global:M_E1_2_StateHash"
+        "AFTER : $after"
+
+        if ($after -ne $global:M_E1_2_StateHash) {
+            throw "Original runtime data changed."
+        }
+
+        "PASS: Original runtime data unchanged"
+
+    } else {
+
+        if (Test-Path "state.json") {
+            throw "Unexpected original state creation."
+        }
+
+        "PASS: Original runtime state not created"
+    }
+BEFORE: 3075A2CAE341E84A758F632B6B9249C984734B9BF4A5D83C1BFDCEFB7EB9BAD7
+AFTER : 3075A2CAE341E84A758F632B6B9249C984734B9BF4A5D83C1BFDCEFB7EB9BAD7
+PASS: Original runtime data unchanged
+Failed: False
+
+04. Verify Demo Runtime Data
+
+> $path = Join-Path `
+        $global:M_E1_2_DemoPath `
+        "state.json"
+
+    if (-not (Test-Path -LiteralPath $path)) {
+        throw "Demo runtime state not found."
+    }
+
+    $data = Get-Content `
+        -LiteralPath $path `
+        -Raw `
+        -Encoding UTF8 |
+        ConvertFrom-Json
+
+    "DEMO QUESTIONS: $($data.quizzes.Count)"
+    "DEMO BEST SCORE: $($data.best_score)"
+    "DEMO HISTORY COUNT: $($data.history.Count)"
+
+    if ($data.quizzes.Count -ne 21) {
+        throw "Expected 21 demo questions."
+    }
+
+    if ($data.history.Count -lt 1) {
+        throw "Expected completed demo game."
+    }
+
+    if ($null -eq $data.best_score) {
+        throw "Expected a recorded best score."
+    }
+
+    "PASS: Demo question and play history verified"
+DEMO QUESTIONS: 21
+DEMO BEST SCORE: 70.0
+DEMO HISTORY COUNT: 1
+PASS: Demo question and play history verified
+Failed: False
+
+05. Verify Application Source Integrity
+
+> git diff --exit-code HEAD -- `
+        main.py `
+        quiz.py `
+        quiz_game.py `
+        storage.py `
+        history.py `
+        console_ui.py `
+        data/default_quizzes.json
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Original application source changed."
+    }
+
+    git status --short
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Git status verification failed."
+    }
+
+    "PASS: Original application unchanged"
+    "PASS: STEP12A screenshot verification completed"
+ M screenshots/03_Quiz_Main_Menu.png
+?? screenshots/04_Quiz_Add.png
+?? screenshots/05_Quiz_List.png
+?? screenshots/06_Quiz_Play.png
+?? screenshots/07_Git_History.png
+?? screenshots/08_Quiz_Result.png
+?? screenshots/09_Quiz_Best_Score.png
+?? screenshots/10_Quiz_History.png
+PASS: Original application unchanged
+PASS: STEP12A screenshot verification completed
+Failed: False

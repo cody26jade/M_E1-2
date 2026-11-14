@@ -1,0 +1,1295 @@
+CODYSSEY MISSION REPORT SYSTEM
+M_E1-2 STEP12BCD - Final Documentation and Evidence
+Date: 2026-11-14 23:55:16
+
+01. Verify Project Readiness
+
+> $branch = git symbolic-ref --short HEAD
+
+    if ($LASTEXITCODE -ne 0 -or $branch -ne "main") {
+        throw "Expected main branch."
+    }
+
+    $count = [int](git rev-list --count HEAD)
+
+    if ($LASTEXITCODE -ne 0 -or $count -lt 14) {
+        throw "STEP11 commit not found."
+    }
+
+    $required = @(
+        "main.py",
+        "quiz.py",
+        "quiz_game.py",
+        "storage.py",
+        "history.py",
+        "console_ui.py",
+        "data/default_quizzes.json",
+        "tests/test_integration.py",
+        "docs/COLLABORATION.md",
+        "README.md"
+    )
+
+    foreach ($file in $required) {
+
+        if (-not (Test-Path $file -PathType Leaf)) {
+            throw "Missing file: $file"
+        }
+
+        "PASS: $file"
+    }
+
+    "TOTAL COMMITS: $count"
+    "PASS: Project readiness verified"
+PASS: main.py
+PASS: quiz.py
+PASS: quiz_game.py
+PASS: storage.py
+PASS: history.py
+PASS: console_ui.py
+PASS: data/default_quizzes.json
+PASS: tests/test_integration.py
+PASS: docs/COLLABORATION.md
+PASS: README.md
+TOTAL COMMITS: 14
+PASS: Project readiness verified
+Failed: False
+
+02. Collect Actual Execution Logs
+
+> $items = @(
+        @{
+            Pattern = "*M_E1-2*STEP11*Integration*"
+            Target = "logs\11_integration_tests.txt"
+            Count = 11
+        },
+        @{
+            Pattern = "*M_E1-2*STEP12A*Screenshot*"
+            Target = "logs\12A_screenshot_verification.txt"
+            Count = 5
+        }
+    )
+
+    foreach ($item in $items) {
+
+        $source = Get-ChildItem $commonLogs -File |
+            Where-Object {
+                $_.Name -like $item.Pattern
+            } |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 1
+
+        if (-not $source) {
+            throw "Execution log not found: $($item.Pattern)"
+        }
+
+        $content = Get-Content `
+            -LiteralPath $source.FullName `
+            -Raw `
+            -Encoding UTF8
+
+        if ($content -match '(?m)^Failed:\s*True\s*$') {
+            throw "Execution log contains failed steps."
+        }
+
+        $results = [regex]::Matches(
+            $content,
+            '(?m)^Failed:\s*False\s*$'
+        )
+
+        if ($results.Count -ne $item.Count) {
+            throw "Unexpected execution result count."
+        }
+
+        $content = $content -replace `
+            '(?i)([A-Z]:\\Users\\)[^\\\r\n]+(?=\\)', `
+            '${1}<USER>'
+
+        $target = Join-Path $root $item.Target
+
+        [System.IO.File]::WriteAllText(
+            $target,
+            $content,
+            $utf8
+        )
+
+        "SOURCE: $($source.Name)"
+        "TARGET: $($item.Target)"
+        "SUCCESSFUL STEPS: $($results.Count)"
+    }
+
+    "PASS: Actual execution logs collected"
+SOURCE: 20261114_234301_719_M_E1-2_STEP11_-_Integration_and_Final_Quality_Tests.log
+TARGET: logs\11_integration_tests.txt
+SUCCESSFUL STEPS: 11
+SOURCE: 20261114_235211_198_M_E1-2_STEP12A_-_Screenshot_Evidence_Verification.log
+TARGET: logs\12A_screenshot_verification.txt
+SUCCESSFUL STEPS: 5
+PASS: Actual execution logs collected
+Failed: False
+
+03. Verify All Development Evidence
+
+> $logs = @(
+        "01_development_environment.txt",
+        "02_project_structure_git.txt",
+        "03_quiz_dataset_creation.txt",
+        "04_quiz_class_development.txt",
+        "05_quizgame_development.txt",
+        "06_console_development.txt",
+        "07_json_persistence.txt",
+        "08_bonus_features.txt",
+        "08A_console_ui.txt",
+        "08B_question_color.txt",
+        "09_stability.txt",
+        "10B_github_remote.txt",
+        "10C_git_collaboration.txt",
+        "10D_git_pull.txt",
+        "11_integration_tests.txt",
+        "12A_screenshot_verification.txt"
+    )
+
+    foreach ($file in $logs) {
+
+        $path = Join-Path "logs" $file
+
+        if (-not (Test-Path $path -PathType Leaf)) {
+            throw "Missing execution evidence: $file"
+        }
+
+        $content = Get-Content $path -Raw -Encoding UTF8
+
+        if ([string]::IsNullOrWhiteSpace($content)) {
+            throw "Empty evidence file: $file"
+        }
+
+        if ($content -match '(?m)^Failed:\s*True\s*$') {
+            throw "Failed step found in: $file"
+        }
+
+        $results = [regex]::Matches(
+            $content,
+            '(?m)^Failed:\s*False\s*$'
+        )
+
+        if ($results.Count -lt 1) {
+            throw "No successful execution steps: $file"
+        }
+
+        "PASS: $file ($($results.Count) steps)"
+    }
+
+    "TOTAL DEVELOPMENT LOGS: $($logs.Count)"
+PASS: 01_development_environment.txt (9 steps)
+PASS: 02_project_structure_git.txt (10 steps)
+PASS: 03_quiz_dataset_creation.txt (9 steps)
+PASS: 04_quiz_class_development.txt (9 steps)
+PASS: 05_quizgame_development.txt (9 steps)
+PASS: 06_console_development.txt (10 steps)
+PASS: 07_json_persistence.txt (11 steps)
+PASS: 08_bonus_features.txt (10 steps)
+PASS: 08A_console_ui.txt (8 steps)
+PASS: 08B_question_color.txt (5 steps)
+PASS: 09_stability.txt (9 steps)
+PASS: 10B_github_remote.txt (7 steps)
+PASS: 10C_git_collaboration.txt (9 steps)
+PASS: 10D_git_pull.txt (6 steps)
+PASS: 11_integration_tests.txt (11 steps)
+PASS: 12A_screenshot_verification.txt (5 steps)
+TOTAL DEVELOPMENT LOGS: 16
+Failed: False
+
+04. Verify Complete Test Suite
+
+> $code = @'
+import unittest
+
+suite = unittest.defaultTestLoader.discover("tests")
+
+count = suite.countTestCases()
+
+print("DISCOVERED TESTS:", count)
+
+if count != 148:
+    raise SystemExit("Expected 148 tests.")
+
+result = unittest.TextTestRunner(
+    verbosity=1
+).run(suite)
+
+passed = (
+    result.testsRun
+    - len(result.failures)
+    - len(result.errors)
+    - len(result.skipped)
+    - len(result.expectedFailures)
+    - len(result.unexpectedSuccesses)
+)
+
+print("TESTS RUN:", result.testsRun)
+print("FAILURES:", len(result.failures))
+print("ERRORS:", len(result.errors))
+print("SKIPPED:", len(result.skipped))
+print("PASSED:", passed)
+
+raise SystemExit(
+    0 if result.wasSuccessful()
+    and passed == 148
+    else 1
+)
+'@
+
+    $code | python - 2>&1
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Final test verification failed."
+    }
+
+    "PASS: All 148 tests verified"
+python : ....................................................................................................................................................
+위치 줄:217 문자:13
++     $code | python - 2>&1
++             ~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (.................................:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+----------------------------------------------------------------------
+Ran 148 tests in 0.330s
+
+OK
+DISCOVERED TESTS: 148
+TESTS RUN: 148
+FAILURES: 0
+ERRORS: 0
+SKIPPED: 0
+PASSED: 148
+PASS: All 148 tests verified
+Failed: False
+
+05. Generate Final README
+
+> $requiredLogs = @(
+        "logs/11_integration_tests.txt",
+        "logs/12A_screenshot_verification.txt"
+    )
+
+    foreach ($file in $requiredLogs) {
+
+        if (-not (Test-Path $file)) {
+            throw "Required evidence missing: $file"
+        }
+
+        $log = Get-Content $file -Raw -Encoding UTF8
+
+        if ($log -match '(?m)^Failed:\s*True\s*$') {
+            throw "Failed evidence found: $file"
+        }
+    }
+
+    $testLog = Get-Content `
+        "logs/11_integration_tests.txt" `
+        -Raw `
+        -Encoding UTF8
+
+    if ($testLog -notmatch 'PASSED:\s*148') {
+        throw "148-test success evidence not found."
+    }
+
+    $content = @'
+# Machine Tool & Vibration Quiz
+
+CODYSSEY AI ALL-IN-ONE | M_E1-2
+
+공작기계 및 진동 분석 학습용 Python 콘솔 퀴즈
+
+![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
+![Questions](https://img.shields.io/badge/Default%20Questions-20-blueviolet)
+![Tests](https://img.shields.io/badge/Automated%20Tests-148-success)
+
+## 1. Project Overview
+
+This project is a Python console-based quiz application
+for learning machine tools and vibration analysis.
+
+공작기계 주축, 이송계, 진동 측정, FFT, RMS,
+베어링 결함주파수 등 산업현장의 기술 지식을
+퀴즈 형태로 학습할 수 있도록 개발하였다.
+
+The project demonstrates Python fundamentals,
+object-oriented programming, JSON persistence,
+exception handling, automated testing,
+and Git collaboration.
+
+## 2. Topic Selection
+
+Machine tools and vibration analysis were selected
+to connect Python programming education with
+practical manufacturing engineering.
+
+The default questions cover basic machine tool
+knowledge and intermediate vibration analysis.
+
+The quiz is an educational tool, not a replacement
+for professional machine fault diagnosis.
+
+## 3. Development Environment
+
+| Item | Requirement |
+|---|---|
+| Operating system | Windows 11 development environment |
+| Python | 3.10 or later |
+| Editor | Visual Studio Code |
+| Version control | Git and GitHub |
+| Libraries | Python standard library only |
+| Interface | Console / terminal |
+| Data format | UTF-8 JSON |
+
+Development environment evidence:
+
+- [Environment screenshot](screenshots/01_Development_Environment.png)
+- [Git configuration screenshot](screenshots/02_Git_Configuration.png)
+- [Environment execution log](logs/01_development_environment.txt)
+
+## 4. Installation and Execution
+
+Clone the public GitHub repository.
+
+    git clone https://github.com/cody26jade/M_E1-2.git
+    cd M_E1-2
+    python main.py
+
+No external Python packages are required.
+
+The application loads the default question bank
+when state.json does not exist.
+
+## 5. Main Menu
+
+| Menu | Function |
+|---|---|
+| 1 | Play quiz |
+| 2 | Add question |
+| 3 | List questions |
+| 4 | View best score |
+| 5 | Delete question |
+| 6 | View play history |
+| 0 | Exit |
+
+![Main menu](screenshots/03_Quiz_Main_Menu.png)
+
+## 6. Default Question Bank
+
+The application includes 20 original questions.
+
+| Difficulty | Questions |
+|---|---:|
+| Beginner | 10 |
+| Intermediate | 10 |
+| Total | 20 |
+
+Each question contains:
+
+- Unique ID
+- Difficulty
+- Category
+- Question text
+- Four choices
+- Correct answer number
+- Hint
+- Explanation
+
+Question bank:
+[data/default_quizzes.json](data/default_quizzes.json)
+
+## 7. Core Features
+
+### 7.1 Play Quiz
+
+Select the number of questions and answer
+using choice numbers 1 through 4.
+
+Questions and choices are randomized.
+
+The application displays correctness,
+the correct answer, and an explanation.
+
+![Quiz play](screenshots/06_Quiz_Play.png)
+
+### 7.2 Add Question
+
+Enter the question, four choices, answer,
+difficulty, category, hint, and explanation.
+
+Input validation is applied before saving.
+
+![Add question](screenshots/04_Quiz_Add.png)
+
+### 7.3 List Questions
+
+View registered questions and their information.
+
+![Question list](screenshots/05_Quiz_List.png)
+
+### 7.4 Best Score
+
+The highest completed game score is retained
+and restored when the application restarts.
+
+![Best score](screenshots/09_Quiz_Best_Score.png)
+
+### 7.5 Exit
+
+The application supports normal exit
+and handles interruption and end-of-input.
+
+## 8. Bonus Features
+
+| Feature | Implementation |
+|---|---|
+| Random questions | Random question selection |
+| Question count | User-selected number of questions |
+| Hint | H key with score deduction |
+| Delete question | Remove a selected question and save |
+| Play history | Record completed games |
+
+The order of answer choices is also randomized.
+The correct answer index is remapped accordingly.
+
+Q cancels the current game.
+Cancelled games are not counted as completed games.
+
+## 9. Scoring System
+
+| Answer result | Points |
+|---|---:|
+| Correct without hint | 10 |
+| Correct with hint | 5 |
+| Incorrect | 0 |
+
+Normalized score:
+
+    Score = earned points / maximum points * 100
+
+Accuracy:
+
+    Accuracy = correct answers / question count * 100
+
+For example, four questions with two ordinary
+correct answers, one hinted correct answer,
+and one incorrect answer produce:
+
+- Earned points: 25 / 40
+- Normalized score: 62.5
+- Accuracy: 75.0 percent
+
+![Game result](screenshots/08_Quiz_Result.png)
+
+## 10. Console User Interface
+
+The terminal interface uses ANSI colors,
+section separators, and blank lines.
+
+| Display | Color |
+|---|---|
+| Application title | Cyan |
+| Menu and section titles | Yellow |
+| Question text | Purple |
+| Correct answer feedback | Blue |
+| Incorrect answer feedback | Red |
+| Hint | Yellow |
+
+The application also supports plain text output
+when color output is unavailable or disabled.
+
+## 11. Object-Oriented Design
+
+### Quiz
+
+Implemented in quiz.py.
+
+Responsibilities:
+
+- Store question information
+- Validate question data
+- Display question information
+- Check the selected answer
+- Provide hints and explanations
+- Shuffle choices and preserve the correct answer
+- Convert between objects and dictionaries
+
+### QuizGame
+
+Implemented in quiz_game.py.
+
+Responsibilities:
+
+- Manage the question bank
+- Add and remove questions
+- Manage game progress
+- Calculate scores
+- Manage the best score
+
+### QuizStorage
+
+Implemented in storage.py.
+
+Responsibilities:
+
+- Load JSON data
+- Save runtime data
+- Initialize the default question bank
+- Handle invalid or corrupted state data
+
+### Console Application
+
+main.py provides the interactive menu
+and connects the application components.
+
+history.py manages play history.
+console_ui.py manages terminal presentation.
+
+## 12. Application Architecture
+
+    User
+      |
+    main.py
+      |
+    QuizGame ---- Quiz
+      |
+    QuizStorage
+      |
+    state.json
+
+Additional modules:
+
+    history.py
+    console_ui.py
+
+## 13. JSON Persistence
+
+The runtime file is state.json in the project root.
+
+Its main fields are:
+
+- quizzes
+- best_score
+- history
+
+The application uses UTF-8 JSON.
+
+Added questions, deleted questions,
+best scores, and completed game history
+are retained across application restarts.
+
+The default question bank is stored separately
+in data/default_quizzes.json.
+
+Runtime data is excluded from Git through
+.gitignore to protect local user information.
+
+## 14. Exception Handling
+
+The application handles:
+
+- Empty input
+- Invalid menu selection
+- Non-numeric input
+- Out-of-range answer numbers
+- Invalid question data
+- Empty question bank
+- Missing state file
+- Invalid or corrupted JSON
+- KeyboardInterrupt
+- End-of-input
+
+Recovery and stability tests are included
+in the automated test suite.
+
+## 15. Play History
+
+Completed games are recorded with
+their time, question count, and score information.
+
+![Play history](screenshots/10_Quiz_History.png)
+
+## 16. Automated Testing
+
+Run the complete test suite:
+
+    python -m unittest discover -s tests -v
+
+The final integration test suite contains
+148 automated tests.
+
+| Test area | Test file |
+|---|---|
+| Quiz validation | tests/test_quiz.py |
+| Game engine | tests/test_quiz_game.py |
+| Console interaction | tests/test_console.py |
+| JSON persistence | tests/test_storage.py |
+| Bonus features | tests/test_bonus.py |
+| Console colors | tests/test_console_ui.py |
+| Stability | tests/test_stability.py |
+| Integration | tests/test_integration.py |
+
+Actual execution evidence:
+
+[STEP11 Integration Test Log](logs/11_integration_tests.txt)
+
+The integration tests use temporary storage
+rather than modifying the user's runtime data.
+
+## 17. Git Version Control
+
+Development uses meaningful Git commits
+for individual features, fixes, and tests.
+
+The project includes branch creation,
+checkout, merge, push, clone, and pull.
+
+A separate cloned repository was used
+to practice a collaboration workflow.
+
+View the Git history:
+
+    git log --oneline --graph --all
+
+![Git history](screenshots/07_Git_History.png)
+
+- [Collaboration guide](docs/COLLABORATION.md)
+- [Remote setup evidence](logs/10B_github_remote.txt)
+- [Clone and merge evidence](logs/10C_git_collaboration.txt)
+- [Pull verification evidence](logs/10D_git_pull.txt)
+
+## 18. Project Structure
+
+    M_E1-2/
+    |-- main.py
+    |-- quiz.py
+    |-- quiz_game.py
+    |-- storage.py
+    |-- history.py
+    |-- console_ui.py
+    |-- data/
+    |   `-- default_quizzes.json
+    |-- tests/
+    |-- logs/
+    |-- screenshots/
+    |-- docs/
+    |   |-- COLLABORATION.md
+    |   `-- EVALUATION_EVIDENCE.md
+    |-- .gitignore
+    |-- .gitattributes
+    `-- README.md
+
+state.json is generated during execution
+and is not included in the repository.
+
+## 19. Evaluation Evidence
+
+The following document connects implementation,
+automated tests, and actual execution logs.
+
+[Complete Evaluation Evidence](docs/EVALUATION_EVIDENCE.md)
+
+Execution logs are retained in the logs directory.
+
+Screenshot evidence is retained in the
+screenshots directory.
+
+Screenshots demonstrate actual manual execution.
+Automated test results are recorded separately.
+
+## 20. Author
+
+GitHub: [cody26jade](https://github.com/cody26jade)
+
+CODYSSEY AI ALL-IN-ONE
+
+M_E1-2 Python Quiz Project
+'@
+
+    [System.IO.File]::WriteAllText(
+        (Join-Path $root "README.md"),
+        $content.TrimEnd() + "`n",
+        $utf8
+    )
+
+    "CREATED: README.md"
+    "README SECTIONS: 20"
+    "PASS: Final README generated"
+CREATED: README.md
+README SECTIONS: 20
+PASS: Final README generated
+Failed: False
+
+06. Generate Consolidated Evaluation Evidence
+
+> $intro = @'
+# M_E1-2 Evaluation Evidence
+
+## 1. Evidence Policy
+
+This document connects the application source code,
+automated tests, and actual execution logs.
+
+Execution results are taken from recorded
+development sessions, not simulated results.
+
+Windows user directory names may be masked
+for privacy.
+
+The screenshots are separate manual execution evidence.
+
+## 2. Requirement Traceability
+
+| Requirement | Implementation | Execution evidence |
+|---|---|---|
+| Python development environment | Python 3.10+ | [STEP01](../logs/01_development_environment.txt) |
+| Git initialization | .gitignore and Git repository | [STEP02](../logs/02_project_structure_git.txt) |
+| Original quiz questions | [Default dataset](../data/default_quizzes.json) | [STEP03](../logs/03_quiz_dataset_creation.txt) |
+| Quiz class | [quiz.py](../quiz.py) | [STEP04](../logs/04_quiz_class_development.txt) |
+| QuizGame class | [quiz_game.py](../quiz_game.py) | [STEP05](../logs/05_quizgame_development.txt) |
+| Interactive menu | [main.py](../main.py) | [STEP06](../logs/06_console_development.txt) |
+| Play quiz | [main.py](../main.py) | [Integration tests](../logs/11_integration_tests.txt) |
+| Add question | [main.py](../main.py) | [Integration tests](../logs/11_integration_tests.txt) |
+| List questions | [main.py](../main.py) | [Integration tests](../logs/11_integration_tests.txt) |
+| Best score | [quiz_game.py](../quiz_game.py) | [Integration tests](../logs/11_integration_tests.txt) |
+| JSON persistence | [storage.py](../storage.py) | [STEP07](../logs/07_json_persistence.txt) |
+| Random questions | [quiz_game.py](../quiz_game.py) | [STEP08](../logs/08_bonus_features.txt) |
+| Question count | [main.py](../main.py) | [STEP08](../logs/08_bonus_features.txt) |
+| Hint and deduction | [quiz_game.py](../quiz_game.py) | [STEP08](../logs/08_bonus_features.txt) |
+| Delete question | [main.py](../main.py) | [Integration tests](../logs/11_integration_tests.txt) |
+| Play history | [history.py](../history.py) | [STEP08](../logs/08_bonus_features.txt) |
+| Console UI | [console_ui.py](../console_ui.py) | [STEP08A](../logs/08A_console_ui.txt) |
+| Question color | [console_ui.py](../console_ui.py) | [STEP08B](../logs/08B_question_color.txt) |
+| Exception handling | [main.py](../main.py) | [STEP09](../logs/09_stability.txt) |
+| Git push | Public GitHub repository | [STEP10B](../logs/10B_github_remote.txt) |
+| Clone and merge | [Collaboration guide](COLLABORATION.md) | [STEP10C](../logs/10C_git_collaboration.txt) |
+| Git pull | Original repository | [STEP10D](../logs/10D_git_pull.txt) |
+| Ten or more commits | Git history | [STEP10D](../logs/10D_git_pull.txt) |
+| Automated tests | [Test directory](../tests/) | [STEP11](../logs/11_integration_tests.txt) |
+| README | [README.md](../README.md) | Final documentation |
+| Screenshots | [Screenshot directory](../screenshots/) | [STEP12A](../logs/12A_screenshot_verification.txt) |
+
+## 3. Actual Execution Records
+
+The following sections reproduce the recorded
+execution logs as indented Markdown code blocks.
+
+'@
+
+    $builder = New-Object System.Text.StringBuilder
+
+    [void]$builder.AppendLine($intro)
+
+    $logs = @(
+        "01_development_environment.txt",
+        "02_project_structure_git.txt",
+        "03_quiz_dataset_creation.txt",
+        "04_quiz_class_development.txt",
+        "05_quizgame_development.txt",
+        "06_console_development.txt",
+        "07_json_persistence.txt",
+        "08_bonus_features.txt",
+        "08A_console_ui.txt",
+        "08B_question_color.txt",
+        "09_stability.txt",
+        "10B_github_remote.txt",
+        "10C_git_collaboration.txt",
+        "10D_git_pull.txt",
+        "11_integration_tests.txt",
+        "12A_screenshot_verification.txt"
+    )
+
+    foreach ($file in $logs) {
+
+        $path = Join-Path "logs" $file
+
+        if (-not (Test-Path $path)) {
+            throw "Missing evidence: $file"
+        }
+
+        $content = Get-Content `
+            -LiteralPath $path `
+            -Raw `
+            -Encoding UTF8
+
+        if ($content -match '(?m)^Failed:\s*True\s*$') {
+            throw "Failed execution evidence: $file"
+        }
+
+        $content = $content -replace `
+            '(?i)([A-Z]:\\Users\\)[^\\\r\n]+(?=\\)', `
+            '${1}<USER>'
+
+        [void]$builder.AppendLine("### $file")
+        [void]$builder.AppendLine()
+        [void]$builder.AppendLine(
+            "[Original execution log](../logs/$file)"
+        )
+        [void]$builder.AppendLine()
+
+        foreach ($line in ($content -split '\r?\n')) {
+
+            [void]$builder.AppendLine("    " + $line)
+        }
+
+        [void]$builder.AppendLine()
+    }
+
+    [void]$builder.AppendLine("## 4. Manual Execution Screenshots")
+    [void]$builder.AppendLine()
+
+    $screenshots = @(
+        "01_Development_Environment.png",
+        "02_Git_Configuration.png",
+        "03_Quiz_Main_Menu.png",
+        "04_Quiz_Add.png",
+        "05_Quiz_List.png",
+        "06_Quiz_Play.png",
+        "07_Git_History.png",
+        "08_Quiz_Result.png",
+        "09_Quiz_Best_Score.png",
+        "10_Quiz_History.png"
+    )
+
+    foreach ($file in $screenshots) {
+
+        $path = Join-Path "screenshots" $file
+
+        if (-not (Test-Path $path)) {
+            throw "Missing screenshot: $file"
+        }
+
+        [void]$builder.AppendLine(
+            "- [$file](../screenshots/$file)"
+        )
+    }
+
+    [void]$builder.AppendLine()
+    [void]$builder.AppendLine("## 5. Evidence Limitations")
+    [void]$builder.AppendLine()
+    [void]$builder.AppendLine(
+        "Automated tests verify the implemented test cases."
+    )
+    [void]$builder.AppendLine(
+        "They do not establish the absence of every possible defect."
+    )
+    [void]$builder.AppendLine(
+        "Screenshot file verification checks file presence and PNG headers."
+    )
+    [void]$builder.AppendLine(
+        "Visual content requires manual inspection."
+    )
+
+    $target = Join-Path `
+        $root `
+        "docs\EVALUATION_EVIDENCE.md"
+
+    [System.IO.File]::WriteAllText(
+        $target,
+        $builder.ToString(),
+        $utf8
+    )
+
+    "CREATED: docs/EVALUATION_EVIDENCE.md"
+    "INCLUDED EXECUTION LOGS: $($logs.Count)"
+    "SCREENSHOT LINKS: $($screenshots.Count)"
+    "PASS: Consolidated evaluation evidence generated"
+CREATED: docs/EVALUATION_EVIDENCE.md
+INCLUDED EXECUTION LOGS: 16
+SCREENSHOT LINKS: 10
+PASS: Consolidated evaluation evidence generated
+Failed: False
+
+07. Verify Documentation Links
+
+> $code = @'
+import re
+
+from pathlib import Path
+from urllib.parse import unquote
+
+root = Path.cwd()
+
+documents = [
+    root / "README.md",
+    root / "docs" / "EVALUATION_EVIDENCE.md",
+    root / "docs" / "COLLABORATION.md",
+]
+
+count = 0
+missing = []
+
+for document in documents:
+
+    text = document.read_text(encoding="utf-8")
+
+    for line in text.splitlines():
+
+        if line.startswith("    "):
+            continue
+
+        links = re.findall(
+            r"\[[^\]]*\]\(([^)]+)\)",
+            line,
+        )
+
+        for link in links:
+
+            if link.startswith((
+                "http://",
+                "https://",
+                "#",
+                "mailto:",
+            )):
+                continue
+
+            target = unquote(
+                link.split("#", 1)[0]
+            )
+
+            if not target:
+                continue
+
+            path = document.parent / target
+
+            count += 1
+
+            if not path.exists():
+
+                missing.append(
+                    f"{document.name}: {link}"
+                )
+
+            else:
+
+                print(
+                    f"PASS: {document.name}: {link}"
+                )
+
+print("LOCAL LINKS CHECKED:", count)
+print("MISSING LINKS:", len(missing))
+
+for item in missing:
+    print("MISSING:", item)
+
+raise SystemExit(1 if missing else 0)
+'@
+
+    $code | python -
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Documentation contains broken links."
+    }
+
+    "PASS: All local documentation links verified"
+PASS: README.md: screenshots/01_Development_Environment.png
+PASS: README.md: screenshots/02_Git_Configuration.png
+PASS: README.md: logs/01_development_environment.txt
+PASS: README.md: screenshots/03_Quiz_Main_Menu.png
+PASS: README.md: data/default_quizzes.json
+PASS: README.md: screenshots/06_Quiz_Play.png
+PASS: README.md: screenshots/04_Quiz_Add.png
+PASS: README.md: screenshots/05_Quiz_List.png
+PASS: README.md: screenshots/09_Quiz_Best_Score.png
+PASS: README.md: screenshots/08_Quiz_Result.png
+PASS: README.md: screenshots/10_Quiz_History.png
+PASS: README.md: logs/11_integration_tests.txt
+PASS: README.md: screenshots/07_Git_History.png
+PASS: README.md: docs/COLLABORATION.md
+PASS: README.md: logs/10B_github_remote.txt
+PASS: README.md: logs/10C_git_collaboration.txt
+PASS: README.md: logs/10D_git_pull.txt
+PASS: README.md: docs/EVALUATION_EVIDENCE.md
+PASS: EVALUATION_EVIDENCE.md: ../logs/01_development_environment.txt
+PASS: EVALUATION_EVIDENCE.md: ../logs/02_project_structure_git.txt
+PASS: EVALUATION_EVIDENCE.md: ../data/default_quizzes.json
+PASS: EVALUATION_EVIDENCE.md: ../logs/03_quiz_dataset_creation.txt
+PASS: EVALUATION_EVIDENCE.md: ../quiz.py
+PASS: EVALUATION_EVIDENCE.md: ../logs/04_quiz_class_development.txt
+PASS: EVALUATION_EVIDENCE.md: ../quiz_game.py
+PASS: EVALUATION_EVIDENCE.md: ../logs/05_quizgame_development.txt
+PASS: EVALUATION_EVIDENCE.md: ../main.py
+PASS: EVALUATION_EVIDENCE.md: ../logs/06_console_development.txt
+PASS: EVALUATION_EVIDENCE.md: ../main.py
+PASS: EVALUATION_EVIDENCE.md: ../logs/11_integration_tests.txt
+PASS: EVALUATION_EVIDENCE.md: ../main.py
+PASS: EVALUATION_EVIDENCE.md: ../logs/11_integration_tests.txt
+PASS: EVALUATION_EVIDENCE.md: ../main.py
+PASS: EVALUATION_EVIDENCE.md: ../logs/11_integration_tests.txt
+PASS: EVALUATION_EVIDENCE.md: ../quiz_game.py
+PASS: EVALUATION_EVIDENCE.md: ../logs/11_integration_tests.txt
+PASS: EVALUATION_EVIDENCE.md: ../storage.py
+PASS: EVALUATION_EVIDENCE.md: ../logs/07_json_persistence.txt
+PASS: EVALUATION_EVIDENCE.md: ../quiz_game.py
+PASS: EVALUATION_EVIDENCE.md: ../logs/08_bonus_features.txt
+PASS: EVALUATION_EVIDENCE.md: ../main.py
+PASS: EVALUATION_EVIDENCE.md: ../logs/08_bonus_features.txt
+PASS: EVALUATION_EVIDENCE.md: ../quiz_game.py
+PASS: EVALUATION_EVIDENCE.md: ../logs/08_bonus_features.txt
+PASS: EVALUATION_EVIDENCE.md: ../main.py
+PASS: EVALUATION_EVIDENCE.md: ../logs/11_integration_tests.txt
+PASS: EVALUATION_EVIDENCE.md: ../history.py
+PASS: EVALUATION_EVIDENCE.md: ../logs/08_bonus_features.txt
+PASS: EVALUATION_EVIDENCE.md: ../console_ui.py
+PASS: EVALUATION_EVIDENCE.md: ../logs/08A_console_ui.txt
+PASS: EVALUATION_EVIDENCE.md: ../console_ui.py
+PASS: EVALUATION_EVIDENCE.md: ../logs/08B_question_color.txt
+PASS: EVALUATION_EVIDENCE.md: ../main.py
+PASS: EVALUATION_EVIDENCE.md: ../logs/09_stability.txt
+PASS: EVALUATION_EVIDENCE.md: ../logs/10B_github_remote.txt
+PASS: EVALUATION_EVIDENCE.md: COLLABORATION.md
+PASS: EVALUATION_EVIDENCE.md: ../logs/10C_git_collaboration.txt
+PASS: EVALUATION_EVIDENCE.md: ../logs/10D_git_pull.txt
+PASS: EVALUATION_EVIDENCE.md: ../logs/10D_git_pull.txt
+PASS: EVALUATION_EVIDENCE.md: ../tests/
+PASS: EVALUATION_EVIDENCE.md: ../logs/11_integration_tests.txt
+PASS: EVALUATION_EVIDENCE.md: ../README.md
+PASS: EVALUATION_EVIDENCE.md: ../screenshots/
+PASS: EVALUATION_EVIDENCE.md: ../logs/12A_screenshot_verification.txt
+PASS: EVALUATION_EVIDENCE.md: ../logs/01_development_environment.txt
+PASS: EVALUATION_EVIDENCE.md: ../logs/02_project_structure_git.txt
+PASS: EVALUATION_EVIDENCE.md: ../logs/03_quiz_dataset_creation.txt
+PASS: EVALUATION_EVIDENCE.md: ../logs/04_quiz_class_development.txt
+PASS: EVALUATION_EVIDENCE.md: ../logs/05_quizgame_development.txt
+PASS: EVALUATION_EVIDENCE.md: ../logs/06_console_development.txt
+PASS: EVALUATION_EVIDENCE.md: ../logs/07_json_persistence.txt
+PASS: EVALUATION_EVIDENCE.md: ../logs/08_bonus_features.txt
+PASS: EVALUATION_EVIDENCE.md: ../logs/08A_console_ui.txt
+PASS: EVALUATION_EVIDENCE.md: ../logs/08B_question_color.txt
+PASS: EVALUATION_EVIDENCE.md: ../logs/09_stability.txt
+PASS: EVALUATION_EVIDENCE.md: ../logs/10B_github_remote.txt
+PASS: EVALUATION_EVIDENCE.md: ../logs/10C_git_collaboration.txt
+PASS: EVALUATION_EVIDENCE.md: ../logs/10D_git_pull.txt
+PASS: EVALUATION_EVIDENCE.md: ../logs/11_integration_tests.txt
+PASS: EVALUATION_EVIDENCE.md: ../logs/12A_screenshot_verification.txt
+PASS: EVALUATION_EVIDENCE.md: ../screenshots/01_Development_Environment.png
+PASS: EVALUATION_EVIDENCE.md: ../screenshots/02_Git_Configuration.png
+PASS: EVALUATION_EVIDENCE.md: ../screenshots/03_Quiz_Main_Menu.png
+PASS: EVALUATION_EVIDENCE.md: ../screenshots/04_Quiz_Add.png
+PASS: EVALUATION_EVIDENCE.md: ../screenshots/05_Quiz_List.png
+PASS: EVALUATION_EVIDENCE.md: ../screenshots/06_Quiz_Play.png
+PASS: EVALUATION_EVIDENCE.md: ../screenshots/07_Git_History.png
+PASS: EVALUATION_EVIDENCE.md: ../screenshots/08_Quiz_Result.png
+PASS: EVALUATION_EVIDENCE.md: ../screenshots/09_Quiz_Best_Score.png
+PASS: EVALUATION_EVIDENCE.md: ../screenshots/10_Quiz_History.png
+LOCAL LINKS CHECKED: 90
+MISSING LINKS: 0
+PASS: All local documentation links verified
+Failed: False
+
+08. Verify Evidence Completeness
+
+> $readme = Get-Content `
+        "README.md" `
+        -Raw `
+        -Encoding UTF8
+
+    $evidence = Get-Content `
+        "docs/EVALUATION_EVIDENCE.md" `
+        -Raw `
+        -Encoding UTF8
+
+    $sections = [regex]::Matches(
+        $readme,
+        '(?m)^## \d+\.'
+    )
+
+    if ($sections.Count -ne 20) {
+        throw "Unexpected README section count."
+    }
+
+    $markers = @(
+        "PASSED: 148",
+        "git clone",
+        "git pull",
+        "git merge",
+        "git commit",
+        "Failed: False"
+    )
+
+    foreach ($marker in $markers) {
+
+        if ($evidence -notmatch [regex]::Escape($marker)) {
+            throw "Evidence marker missing: $marker"
+        }
+
+        "PASS: Evidence marker $marker"
+    }
+
+    $screenshots = @(
+        Get-ChildItem "screenshots" -Filter "*.png" -File
+    )
+
+    if ($screenshots.Count -lt 10) {
+        throw "Expected at least ten screenshots."
+    }
+
+    "README SECTIONS: $($sections.Count)"
+    "SCREENSHOT FILES: $($screenshots.Count)"
+    "EVIDENCE CHARACTERS: $($evidence.Length)"
+    "PASS: Evidence completeness verified"
+PASS: Evidence marker PASSED: 148
+PASS: Evidence marker git clone
+PASS: Evidence marker git pull
+PASS: Evidence marker git merge
+PASS: Evidence marker git commit
+PASS: Evidence marker Failed: False
+README SECTIONS: 20
+SCREENSHOT FILES: 10
+EVIDENCE CHARACTERS: 455117
+PASS: Evidence completeness verified
+Failed: False
+
+09. Verify Privacy and Source Integrity
+
+> if ($null -ne $stateBefore) {
+
+        if (-not (Test-Path "state.json")) {
+            throw "Original runtime state missing."
+        }
+
+        $stateAfter = (
+            Get-FileHash state.json -Algorithm SHA256
+        ).Hash
+
+        if ($stateAfter -ne $stateBefore) {
+            throw "Original runtime data changed."
+        }
+
+        "PASS: Original state.json unchanged"
+
+    } elseif (Test-Path "state.json") {
+
+        throw "Unexpected runtime state creation."
+    }
+
+    git check-ignore --no-index -- state.json
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Runtime state is not ignored."
+    }
+
+    $tracked = @(git ls-files)
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Tracked file verification failed."
+    }
+
+    $private = @(
+        $tracked | Where-Object {
+            $_ -match '(^|/)(state\.json($|\.)|\.env($|\.))'
+        }
+    )
+
+    if ($private.Count -gt 0) {
+        throw "Private runtime files are tracked."
+    }
+
+    git diff --exit-code HEAD -- `
+        main.py `
+        quiz.py `
+        quiz_game.py `
+        storage.py `
+        history.py `
+        console_ui.py `
+        data/default_quizzes.json `
+        tests
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Application or test source changed."
+    }
+
+    $files = @(
+        Get-ChildItem "logs" -Filter "*.txt" -File
+    )
+
+    $files += Get-Item "README.md"
+    $files += Get-Item "docs/EVALUATION_EVIDENCE.md"
+
+    $patterns = @(
+        'ghp_[A-Za-z0-9]{30,}',
+        'github_pat_[A-Za-z0-9_]{30,}',
+        'sk-[A-Za-z0-9_-]{20,}',
+        'AKIA[A-Z0-9]{16}',
+        '-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----',
+        'https?://[^/\s:@]+:[^/\s@]+@'
+    )
+
+    foreach ($file in $files) {
+
+        $content = Get-Content `
+            -LiteralPath $file.FullName `
+            -Raw `
+            -Encoding UTF8
+
+        foreach ($pattern in $patterns) {
+
+            if ($content -match $pattern) {
+                throw "Potential secret detected in $($file.Name)"
+            }
+        }
+    }
+
+    "PASS: Basic secret pattern scan completed"
+    "PASS: Runtime data excluded from Git"
+    "PASS: Application and test sources unchanged"
+PASS: Original state.json unchanged
+state.json
+PASS: Basic secret pattern scan completed
+PASS: Runtime data excluded from Git
+PASS: Application and test sources unchanged
+Failed: False
+
+10. Verify Final Documentation Status
+
+> $files = @(
+        "README.md",
+        "docs/EVALUATION_EVIDENCE.md",
+        "logs/11_integration_tests.txt",
+        "logs/12A_screenshot_verification.txt"
+    )
+
+    foreach ($file in $files) {
+
+        if (-not (Test-Path $file -PathType Leaf)) {
+            throw "Final document missing: $file"
+        }
+
+        $size = (Get-Item $file).Length
+
+        if ($size -le 0) {
+            throw "Empty document: $file"
+        }
+
+        "PASS: $file ($size bytes)"
+    }
+
+    git status --short
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Git status failed."
+    }
+
+    "PASS: STEP12BCD documentation generated"
+    "NEXT: Review report before committing"
+PASS: README.md (9244 bytes)
+PASS: docs/EVALUATION_EVIDENCE.md (465507 bytes)
+PASS: logs/11_integration_tests.txt (39512 bytes)
+PASS: logs/12A_screenshot_verification.txt (5772 bytes)
+ M README.md
+ M screenshots/03_Quiz_Main_Menu.png
+?? docs/EVALUATION_EVIDENCE.md
+?? logs/11_integration_tests.txt
+?? logs/12A_screenshot_verification.txt
+?? screenshots/04_Quiz_Add.png
+?? screenshots/05_Quiz_List.png
+?? screenshots/06_Quiz_Play.png
+?? screenshots/07_Git_History.png
+?? screenshots/08_Quiz_Result.png
+?? screenshots/09_Quiz_Best_Score.png
+?? screenshots/10_Quiz_History.png
+PASS: STEP12BCD documentation generated
+NEXT: Review report before committing
+Failed: False
