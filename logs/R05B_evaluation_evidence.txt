@@ -1,0 +1,975 @@
+CODYSSEY MISSION REPORT SYSTEM
+M_E1-2 R05B - Evaluation Evidence Recovery
+Date: 2026-11-15 00:28:08
+
+01. Recover Verified Original Logs
+
+> $verified = @()
+
+    foreach ($spec in $specifications) {
+
+        $source = Join-Path $commonLogs $spec.Source
+
+        if (-not (Test-Path $source -PathType Leaf)) {
+            throw "Missing original log: $source"
+        }
+
+        $content = [System.IO.File]::ReadAllText(
+            $source
+        )
+
+        $lines = $content -split '\r?\n'
+
+        if ($lines[1].Trim() -ne $spec.Title) {
+            throw "Incorrect report title."
+        }
+
+        $passed = [regex]::Matches(
+            $content,
+            '(?m)^Failed:[ \t]*False[ \t]*\r?$'
+        ).Count
+
+        $failed = [regex]::Matches(
+            $content,
+            '(?m)^Failed:[ \t]*True[ \t]*\r?$'
+        ).Count
+
+        if ($passed -ne $spec.Steps -or $failed -ne 0) {
+            throw "Report verification failed: $source"
+        }
+
+        if ($lines -notcontains $spec.Marker) {
+            throw "Completion marker missing."
+        }
+
+        $verified += @{
+            Spec = $spec
+            Content = $content
+        }
+
+        "VERIFIED: $($spec.Source)"
+        "PASSED STEPS: $passed"
+        "FAILED STEPS: $failed"
+    }
+
+    foreach ($item in $verified) {
+
+        $safe = $item.Content -replace `
+            '(?i)([A-Z]:\\Users\\)[^\\\r\n]+(?=\\)', `
+            '${1}<USER>'
+
+        $safe = $safe -replace "`r`n", "`n"
+        $safe = $safe -replace "`r", "`n"
+
+        $safe = [regex]::Replace(
+            $safe,
+            '(?m)[ \t]+$',
+            ''
+        )
+
+        $safe = $safe.TrimEnd() + "`n"
+
+        $destination = Join-Path `
+            $root `
+            ("logs/" + $item.Spec.Destination)
+
+        [System.IO.File]::WriteAllText(
+            $destination,
+            $safe,
+            $utf8
+        )
+
+        "SAVED: $($item.Spec.Destination)"
+    }
+
+    "TOTAL RECOVERED LOGS: 4"
+    "TOTAL VERIFIED STEPS: 25"
+    "PASS: All original revision logs recovered"
+VERIFIED: 20261115_001220_770_M_E1-2_R01_-_NEITO_Revision_Baseline.log
+PASSED STEPS: 6
+FAILED STEPS: 0
+VERIFIED: 20261115_001349_626_M_E1-2_R02_-_Object_Oriented_Design.log
+PASSED STEPS: 5
+FAILED STEPS: 0
+VERIFIED: 20261115_001554_563_M_E1-2_R03_-_Permission_Error_and_Recovery.log
+PASSED STEPS: 7
+FAILED STEPS: 0
+VERIFIED: 20261115_001841_084_M_E1-2_R04_-_Large_Scale_Performance_Benchmark.log
+PASSED STEPS: 7
+FAILED STEPS: 0
+SAVED: R01_revision_baseline.txt
+SAVED: R02_object_oriented_design.txt
+SAVED: R03_permission_errors.txt
+SAVED: R04_scalability_benchmark.txt
+TOTAL RECOVERED LOGS: 4
+TOTAL VERIFIED STEPS: 25
+PASS: All original revision logs recovered
+Failed: False
+
+02. Verify Actual Execution Evidence
+
+> $code = @'
+import json
+import math
+import re
+
+from pathlib import Path
+
+logs = Path("logs")
+
+r02 = (
+    logs / "R02_object_oriented_design.txt"
+).read_text(encoding="utf-8")
+
+r03 = (
+    logs / "R03_permission_errors.txt"
+).read_text(encoding="utf-8")
+
+r04 = (
+    logs / "R04_scalability_benchmark.txt"
+).read_text(encoding="utf-8")
+
+assert (
+    "PASS: Class reusability demonstrated"
+    in r02.splitlines()
+)
+
+assert (
+    "PASS: All permission error tests passed"
+    in r03.splitlines()
+)
+
+for text in (r03, r04):
+
+    for marker in (
+        "TESTS RUN: 156",
+        "FAILURES: 0",
+        "ERRORS: 0",
+        "PASSED: 156",
+    ):
+
+        assert marker in text.splitlines(), marker
+
+rows = {}
+
+for line in r04.splitlines():
+
+    if line.startswith("RESULT: {"):
+
+        row = json.loads(
+            line.removeprefix("RESULT: ")
+        )
+
+        rows[row["count"]] = row
+
+assert set(rows) == {
+    20, 100, 1000, 10000
+}
+
+report = Path(
+    "docs/SCALABILITY_ANALYSIS.md"
+).read_text(encoding="utf-8")
+
+timing_keys = (
+    "create_ms",
+    "init_ms",
+    "list_ms",
+    "search_ms",
+    "random_ms",
+    "save_ms",
+    "load_ms",
+)
+
+for count, row in sorted(rows.items()):
+
+    for key in (
+        *timing_keys,
+        "memory_mib",
+        "size_kib",
+    ):
+
+        assert math.isfinite(row[key])
+        assert row[key] >= 0
+
+    expected = (
+        f"| {count} | "
+        + " | ".join(
+            f"{row[key]:.6f}"
+            for key in timing_keys
+        )
+        + " |"
+    )
+
+    assert expected in report.splitlines()
+
+    memory_row = (
+        f"| {count} "
+        f"| {row['memory_mib']:.6f} "
+        f"| {row['size_kib']:.6f} |"
+    )
+
+    assert memory_row in report.splitlines()
+
+    assert (
+        f"PASS: {count} question round trip"
+        in r04.splitlines()
+    )
+
+    print("VERIFIED BENCHMARK:", count)
+
+assert (
+    "CASES COMPLETED: 4"
+    in r04.splitlines()
+)
+
+print("PERMISSION TESTS: verified")
+print("CLASS REUSE: verified")
+print("REGRESSION TESTS: 156 passed")
+print("BENCHMARK CASES: 4")
+print("PASS: Actual execution evidence verified")
+'@
+
+    $code | python -
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Evidence validation failed."
+    }
+VERIFIED BENCHMARK: 20
+VERIFIED BENCHMARK: 100
+VERIFIED BENCHMARK: 1000
+VERIFIED BENCHMARK: 10000
+PERMISSION TESTS: verified
+CLASS REUSE: verified
+REGRESSION TESTS: 156 passed
+BENCHMARK CASES: 4
+PASS: Actual execution evidence verified
+Failed: False
+
+03. Complete README and Evaluation Documents
+
+> $code = @'
+import json
+import re
+
+from pathlib import Path
+
+readme = Path("README.md")
+
+evidence = Path(
+    "docs/EVALUATION_EVIDENCE.md"
+)
+
+log = Path(
+    "logs/R04_scalability_benchmark.txt"
+).read_text(encoding="utf-8")
+
+rows = {}
+
+for line in log.splitlines():
+
+    if line.startswith("RESULT: {"):
+
+        row = json.loads(
+            line.removeprefix("RESULT: ")
+        )
+
+        rows[row["count"]] = row
+
+assert set(rows) == {
+    20, 100, 1000, 10000
+}
+
+elapsed_values = re.findall(
+    r"^TOTAL BENCHMARK SECONDS:\s*(\d+(?:\.\d+)?)$",
+    log,
+    re.MULTILINE
+)
+
+assert elapsed_values
+
+elapsed = float(
+    elapsed_values[-1]
+)
+
+table = [
+    "| Questions | Initialize (ms) | Save (ms) | Load (ms) | Search (ms) | Memory (MiB) |",
+    "|---:|---:|---:|---:|---:|---:|",
+]
+
+for count, row in sorted(rows.items()):
+
+    table.append(
+        f"| {count} "
+        f"| {row['init_ms']:.3f} "
+        f"| {row['save_ms']:.3f} "
+        f"| {row['load_ms']:.3f} "
+        f"| {row['search_ms']:.6f} "
+        f"| {row['memory_mib']:.3f} |"
+    )
+
+heading = (
+    "## NEITO Revision - Additional Evaluation Evidence"
+)
+
+def update_document(path, lines):
+
+    original = path.read_text(
+        encoding="utf-8"
+    )
+
+    if heading in original:
+
+        original = original.split(
+            heading,
+            1
+        )[0]
+
+    updated = (
+        original.rstrip()
+        + "\n\n"
+        + "\n".join(lines)
+        + "\n"
+    )
+
+    updated = re.sub(
+        r"[ \t]+$",
+        "",
+        updated,
+        flags=re.MULTILINE
+    )
+
+    path.write_text(
+        updated.rstrip() + "\n",
+        encoding="utf-8",
+        newline="\n"
+    )
+
+for filename in (
+    "R01_revision_baseline.txt",
+    "R02_object_oriented_design.txt",
+    "R03_permission_errors.txt",
+    "R04_scalability_benchmark.txt",
+):
+
+    path = Path("logs") / filename
+
+    assert path.is_file()
+
+    content = path.read_text(
+        encoding="utf-8"
+    )
+
+    assert not re.search(
+        r"^Failed:\s*True\s*$",
+        content,
+        re.MULTILINE
+    )
+
+readme_lines = [
+    heading,
+    "",
+    "Initial NEITO assessment: 15 of 18 criteria passed.",
+    "",
+    "This revision addresses criteria 13, 15, and 16",
+    "and adds explanations for criteria 12 and 14.",
+    "",
+    "### Current Test Status",
+    "",
+    "The original 148 tests are retained.",
+    "Eight permission-error tests were added.",
+    "",
+    "- Tests run: 156",
+    "- Passed: 156",
+    "- Failures: 0",
+    "- Errors: 0",
+    "",
+    "Earlier test counts describe historical milestones.",
+    "",
+    "### Criterion 12 - Git Commit Convention",
+    "",
+    "Feat adds functionality, Fix corrects defects,",
+    "Docs updates documentation, and Refactor improves",
+    "internal structure without intentionally changing",
+    "external behavior. Test identifies test changes.",
+    "",
+    "### Criterion 13 - Why Classes Are Used",
+    "",
+    "Quiz encapsulates question data and reusable",
+    "validation and answer-checking behavior.",
+    "",
+    "QuizGame abstracts game operations and manages",
+    "a collection of Quiz objects independently of",
+    "the console user interface.",
+    "",
+    "QuizStorage separates persistence responsibilities.",
+    "",
+    "This separation improves abstraction, encapsulation,",
+    "reusability, maintainability, and testability.",
+    "",
+    "The same Quiz class was reused for all 20 default",
+    "questions. Serialization and reconstruction were",
+    "verified using the existing class implementation.",
+    "",
+    "[Object-oriented design](docs/OBJECT_ORIENTED_DESIGN.md)",
+    "",
+    "### Criterion 14 - Why JSON Is Used",
+    "",
+    "JSON is human-readable and language-independent.",
+    "It supports structured data, UTF-8 text, and",
+    "standard tools across programming languages.",
+    "Python provides built-in JSON support.",
+    "",
+    "### Criterion 15 - File Permission Error Handling",
+    "",
+    "PermissionError is a subclass of OSError.",
+    "The application reports save failures and allows",
+    "saving to be retried after access is restored.",
+    "",
+    "Temporary-file-based replacement protects the",
+    "original state in the tested failure scenarios.",
+    "",
+    "Eight automated tests cover permission errors,",
+    "original file preservation, error messages,",
+    "retry, and successful reload.",
+    "",
+    "These tests simulate permission errors rather",
+    "than modifying actual Windows access permissions.",
+    "",
+    "[File error recovery](docs/FILE_ERROR_RECOVERY.md)",
+    "",
+    "[Permission tests](tests/test_permission_errors.py)",
+    "",
+    "### Criterion 16 - Large-Scale Performance",
+    "",
+    "The actual application was benchmarked using",
+    "20, 100, 1000, and 10000 synthetic questions.",
+    "",
+    *table,
+    "",
+    f"Total benchmark time: {elapsed:.3f} seconds.",
+    "",
+    "All four save-and-reload cases passed.",
+    "",
+    "Repeated duplicate validation is a scalability",
+    "bottleneck. Initialization and JSON persistence",
+    "become slower as the dataset grows.",
+    "",
+    "Linear search is O(N). Dictionary lookup is",
+    "expected to be O(1) on average.",
+    "",
+    "Future improvements include dictionary indexing,",
+    "normalized question sets, bulk validation,",
+    "pagination, and SQLite persistence.",
+    "",
+    "These improvements are proposed, not implemented.",
+    "",
+    "Memory represents traced Python allocations during",
+    "Quiz object creation, not total process memory.",
+    "",
+    "[Actual scalability analysis](docs/SCALABILITY_ANALYSIS.md)",
+    "",
+    "[Benchmark source](benchmarks/benchmark_scalability.py)",
+    "",
+    "### Reproduce Additional Tests",
+    "",
+    "Run from the project root:",
+    "",
+    "    python -m unittest discover -s tests -v",
+    "",
+    "    python -m unittest discover -s tests -p test_permission_errors.py -v",
+    "",
+    "    python -u benchmarks/benchmark_scalability.py",
+    "",
+    "The benchmark uses temporary state files and",
+    "regenerates the scalability analysis document.",
+    "",
+    "### Actual Revision Execution Records",
+    "",
+    "- [R01 baseline](logs/R01_revision_baseline.txt)",
+    "- [R02 class reuse](logs/R02_object_oriented_design.txt)",
+    "- [R03 permission tests](logs/R03_permission_errors.txt)",
+    "- [R04 performance benchmark](logs/R04_scalability_benchmark.txt)",
+    "",
+    "[Consolidated evaluation evidence](docs/EVALUATION_EVIDENCE.md)",
+    "",
+    "The original application source and runtime",
+    "state were preserved during revision tests.",
+    "",
+    "The final NEITO reassessment remains pending.",
+]
+
+small = rows[1000]
+large = rows[10000]
+
+evidence_lines = [
+    heading,
+    "",
+    "### Revision Summary",
+    "",
+    "Initial assessment: 15/18 criteria passed.",
+    "",
+    "| Criterion | Revision evidence |",
+    "|---|---|",
+    "| 12 | [Git conventions](OBJECT_ORIENTED_DESIGN.md) |",
+    "| 13 | [Object-oriented design](OBJECT_ORIENTED_DESIGN.md) |",
+    "| 14 | [JSON selection](OBJECT_ORIENTED_DESIGN.md) |",
+    "| 15 | [File error recovery](FILE_ERROR_RECOVERY.md) |",
+    "| 16 | [Scalability analysis](SCALABILITY_ANALYSIS.md) |",
+    "",
+    "### Criterion 13 - Actual Class Reuse",
+    "",
+    "The same Quiz class is reused for all default",
+    "questions. QuizGame manages reusable Quiz objects.",
+    "QuizStorage separates file persistence.",
+    "",
+    "The design provides abstraction, encapsulation,",
+    "reusability, composition, maintainability,",
+    "and independent testing.",
+    "",
+    "Actual verified execution marker:",
+    "",
+    "    PASS: Class reusability demonstrated",
+    "",
+    "- [Quiz source](../quiz.py)",
+    "- [QuizGame source](../quiz_game.py)",
+    "- [Storage source](../storage.py)",
+    "- [Actual execution log](../logs/R02_object_oriented_design.txt)",
+    "",
+    "### Criterion 15 - Actual Permission Error Tests",
+    "",
+    "Eight permission-error tests were added.",
+    "",
+    "    python -m unittest discover -s tests -p test_permission_errors.py -v",
+    "",
+    "Actual verified execution marker:",
+    "",
+    "    PASS: All permission error tests passed",
+    "",
+    "The tests simulate read denial, temporary write",
+    "denial, directory denial, replacement denial,",
+    "error reporting, retry, and reload.",
+    "",
+    "Actual regression result:",
+    "",
+    "    TESTS RUN: 156",
+    "    FAILURES: 0",
+    "    ERRORS: 0",
+    "    PASSED: 156",
+    "",
+    "The tests verify original file preservation",
+    "and successful saving after the simulated",
+    "permission error is removed.",
+    "",
+    "- [Test source](../tests/test_permission_errors.py)",
+    "- [Storage source](../storage.py)",
+    "- [Console source](../main.py)",
+    "- [Actual test log](../logs/R03_permission_errors.txt)",
+    "",
+    "### Criterion 16 - Actual Scalability Measurements",
+    "",
+    "    python -u benchmarks/benchmark_scalability.py",
+    "",
+    *table,
+    "",
+    "Actual results:",
+    "",
+    "    PASS: 20 question round trip",
+    "    PASS: 100 question round trip",
+    "    PASS: 1000 question round trip",
+    "    PASS: 10000 question round trip",
+    "    CASES COMPLETED: 4",
+    f"    TOTAL BENCHMARK SECONDS: {elapsed:.3f}",
+    "",
+    "Measured growth from 1000 to 10000 questions:",
+    "",
+    f"- Initialization: {large['init_ms'] / small['init_ms']:.2f}x",
+    f"- JSON save: {large['save_ms'] / small['save_ms']:.2f}x",
+    f"- JSON load: {large['load_ms'] / small['load_ms']:.2f}x",
+    f"- Linear search: {large['search_ms'] / small['search_ms']:.2f}x",
+    f"- Object creation memory: {large['memory_mib'] / small['memory_mib']:.2f}x",
+    "",
+    "Repeated duplicate checking can cause O(N^2)",
+    "initialization and persistence validation costs.",
+    "Linear lookup is O(N), while dictionary lookup",
+    "is expected to be O(1) on average.",
+    "",
+    "Proposed improvements include dictionary indexing,",
+    "normalized text sets, bulk validation,",
+    "pagination, and SQLite.",
+    "",
+    "Most timings are single-run observations.",
+    "Search is the median of 100 repetitions.",
+    "Memory represents object creation allocations,",
+    "not total process memory.",
+    "",
+    "- [Benchmark source](../benchmarks/benchmark_scalability.py)",
+    "- [Full analysis](SCALABILITY_ANALYSIS.md)",
+    "- [Actual benchmark log](../logs/R04_scalability_benchmark.txt)",
+    "",
+    "### Revision Log Recovery",
+    "",
+    "The original R05 collection attempted to find",
+    "TXT files, but the report engine saves LOG files.",
+    "",
+    "The original four reports were located and",
+    "validated using their actual filenames, titles,",
+    "completion markers, and step results.",
+    "",
+    "All 25 original revision steps passed.",
+    "",
+    "The recovered copies use UTF-8 text and LF",
+    "line endings. Local user-directory names",
+    "are redacted where applicable.",
+    "",
+    "No benchmark values or test outcomes were invented.",
+    "",
+    "### Revision Data Protection",
+    "",
+    "The original application source, default data,",
+    "existing tests, and screenshots were retained.",
+    "",
+    "Permission tests and benchmark tests used",
+    "isolated temporary state files.",
+    "",
+    "- [Baseline verification](../logs/R01_revision_baseline.txt)",
+    "- [Regression verification](../logs/R04_scalability_benchmark.txt)",
+    "",
+    "### Revision Status",
+    "",
+    "The final GitHub upload and NEITO reassessment",
+    "are separate subsequent steps.",
+]
+
+update_document(
+    readme,
+    readme_lines
+)
+
+update_document(
+    evidence,
+    evidence_lines
+)
+
+print("UPDATED: README.md")
+print("UPDATED: docs/EVALUATION_EVIDENCE.md")
+print("ACTUAL BENCHMARK CASES:", len(rows))
+print("ACTUAL BENCHMARK SECONDS:", elapsed)
+print("PASS: Consolidated evaluation evidence completed")
+'@
+
+    $code | python -
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Documentation update failed."
+    }
+UPDATED: README.md
+UPDATED: docs/EVALUATION_EVIDENCE.md
+ACTUAL BENCHMARK CASES: 4
+ACTUAL BENCHMARK SECONDS: 16.0
+PASS: Consolidated evaluation evidence completed
+Failed: False
+
+04. Verify Documentation and Local Links
+
+> $code = @'
+import re
+
+from pathlib import Path
+
+files = [
+    Path("README.md"),
+    Path("docs/EVALUATION_EVIDENCE.md"),
+    Path("docs/OBJECT_ORIENTED_DESIGN.md"),
+    Path("docs/FILE_ERROR_RECOVERY.md"),
+    Path("docs/SCALABILITY_ANALYSIS.md"),
+]
+
+heading = (
+    "## NEITO Revision - Additional Evaluation Evidence"
+)
+
+count = 0
+
+for path in files:
+
+    text = path.read_text(
+        encoding="utf-8"
+    )
+
+    if path in files[:2]:
+
+        assert text.count(heading) == 1
+
+        text = text.split(
+            heading,
+            1
+        )[1]
+
+        for marker in (
+            "Criterion 13",
+            "Criterion 15",
+            "Criterion 16",
+            "156",
+            "10000",
+            "Permission",
+        ):
+
+            assert marker in text, marker
+
+    links = re.findall(
+        r"\[[^\]]+\]\(([^)]+)\)",
+        text
+    )
+
+    for link in links:
+
+        if link.startswith(
+            ("https://", "http://", "#")
+        ):
+            continue
+
+        target = link.split(
+            "#",
+            1
+        )[0]
+
+        assert (
+            path.parent / target
+        ).exists(), (path, link)
+
+        count += 1
+
+        print(
+            "LINK VERIFIED:",
+            path.name,
+            "->",
+            link
+        )
+
+    raw = path.read_bytes()
+
+    assert b"\r" not in raw
+
+    assert not raw.startswith(
+        b"\xef\xbb\xbf"
+    )
+
+print("DOCUMENTS VERIFIED:", len(files))
+print("LOCAL LINKS VERIFIED:", count)
+print("PASS: Evaluation documentation verified")
+'@
+
+    $code | python -
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Documentation verification failed."
+    }
+LINK VERIFIED: README.md -> docs/OBJECT_ORIENTED_DESIGN.md
+LINK VERIFIED: README.md -> docs/FILE_ERROR_RECOVERY.md
+LINK VERIFIED: README.md -> tests/test_permission_errors.py
+LINK VERIFIED: README.md -> docs/SCALABILITY_ANALYSIS.md
+LINK VERIFIED: README.md -> benchmarks/benchmark_scalability.py
+LINK VERIFIED: README.md -> logs/R01_revision_baseline.txt
+LINK VERIFIED: README.md -> logs/R02_object_oriented_design.txt
+LINK VERIFIED: README.md -> logs/R03_permission_errors.txt
+LINK VERIFIED: README.md -> logs/R04_scalability_benchmark.txt
+LINK VERIFIED: README.md -> docs/EVALUATION_EVIDENCE.md
+LINK VERIFIED: EVALUATION_EVIDENCE.md -> OBJECT_ORIENTED_DESIGN.md
+LINK VERIFIED: EVALUATION_EVIDENCE.md -> OBJECT_ORIENTED_DESIGN.md
+LINK VERIFIED: EVALUATION_EVIDENCE.md -> OBJECT_ORIENTED_DESIGN.md
+LINK VERIFIED: EVALUATION_EVIDENCE.md -> FILE_ERROR_RECOVERY.md
+LINK VERIFIED: EVALUATION_EVIDENCE.md -> SCALABILITY_ANALYSIS.md
+LINK VERIFIED: EVALUATION_EVIDENCE.md -> ../quiz.py
+LINK VERIFIED: EVALUATION_EVIDENCE.md -> ../quiz_game.py
+LINK VERIFIED: EVALUATION_EVIDENCE.md -> ../storage.py
+LINK VERIFIED: EVALUATION_EVIDENCE.md -> ../logs/R02_object_oriented_design.txt
+LINK VERIFIED: EVALUATION_EVIDENCE.md -> ../tests/test_permission_errors.py
+LINK VERIFIED: EVALUATION_EVIDENCE.md -> ../storage.py
+LINK VERIFIED: EVALUATION_EVIDENCE.md -> ../main.py
+LINK VERIFIED: EVALUATION_EVIDENCE.md -> ../logs/R03_permission_errors.txt
+LINK VERIFIED: EVALUATION_EVIDENCE.md -> ../benchmarks/benchmark_scalability.py
+LINK VERIFIED: EVALUATION_EVIDENCE.md -> SCALABILITY_ANALYSIS.md
+LINK VERIFIED: EVALUATION_EVIDENCE.md -> ../logs/R04_scalability_benchmark.txt
+LINK VERIFIED: EVALUATION_EVIDENCE.md -> ../logs/R01_revision_baseline.txt
+LINK VERIFIED: EVALUATION_EVIDENCE.md -> ../logs/R04_scalability_benchmark.txt
+LINK VERIFIED: OBJECT_ORIENTED_DESIGN.md -> ../quiz.py
+LINK VERIFIED: OBJECT_ORIENTED_DESIGN.md -> ../quiz_game.py
+LINK VERIFIED: OBJECT_ORIENTED_DESIGN.md -> ../storage.py
+LINK VERIFIED: FILE_ERROR_RECOVERY.md -> ../storage.py
+LINK VERIFIED: FILE_ERROR_RECOVERY.md -> ../main.py
+LINK VERIFIED: FILE_ERROR_RECOVERY.md -> ../tests/test_permission_errors.py
+LINK VERIFIED: SCALABILITY_ANALYSIS.md -> ../benchmarks/benchmark_scalability.py
+DOCUMENTS VERIFIED: 5
+LOCAL LINKS VERIFIED: 35
+PASS: Evaluation documentation verified
+Failed: False
+
+05. Run All 156 Regression Tests
+
+> $code = @'
+import sys
+import unittest
+
+suite = unittest.defaultTestLoader.discover(
+    "tests"
+)
+
+assert suite.countTestCases() == 156
+
+result = unittest.TextTestRunner(
+    stream=sys.stdout,
+    verbosity=1
+).run(suite)
+
+passed = (
+    result.testsRun
+    - len(result.failures)
+    - len(result.errors)
+    - len(result.skipped)
+    - len(result.expectedFailures)
+    - len(result.unexpectedSuccesses)
+)
+
+print("TESTS RUN:", result.testsRun)
+print("FAILURES:", len(result.failures))
+print("ERRORS:", len(result.errors))
+print("SKIPPED:", len(result.skipped))
+print("PASSED:", passed)
+
+raise SystemExit(
+    0 if result.wasSuccessful()
+    and passed == 156
+    else 1
+)
+'@
+
+    $code | python -
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Regression tests failed."
+    }
+
+    "PASS: All 156 regression tests verified"
+............................................................................................................................................................
+----------------------------------------------------------------------
+Ran 156 tests in 0.448s
+
+OK
+TESTS RUN: 156
+FAILURES: 0
+ERRORS: 0
+SKIPPED: 0
+PASSED: 156
+PASS: All 156 regression tests verified
+Failed: False
+
+06. Verify Final Revision Scope
+
+> git diff --exit-code HEAD -- `
+        main.py `
+        quiz.py `
+        quiz_game.py `
+        storage.py `
+        history.py `
+        console_ui.py `
+        data `
+        tests `
+        screenshots
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Existing application files changed."
+    }
+
+    if ($null -ne $stateBefore) {
+
+        if (-not (Test-Path "state.json")) {
+            throw "Original state missing."
+        }
+
+        $after = (
+            Get-FileHash state.json -Algorithm SHA256
+        ).Hash
+
+        if ($after -ne $stateBefore) {
+            throw "Original runtime state changed."
+        }
+
+    } elseif (Test-Path "state.json") {
+
+        throw "Unexpected runtime state creation."
+    }
+
+    git check-ignore --no-index -- state.json
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Runtime state ignore check failed."
+    }
+
+    $expected = @(
+        " M README.md",
+        " M docs/EVALUATION_EVIDENCE.md",
+        "?? benchmarks/benchmark_scalability.py",
+        "?? docs/OBJECT_ORIENTED_DESIGN.md",
+        "?? docs/FILE_ERROR_RECOVERY.md",
+        "?? docs/SCALABILITY_ANALYSIS.md",
+        "?? tests/test_permission_errors.py",
+        "?? logs/R01_revision_baseline.txt",
+        "?? logs/R02_object_oriented_design.txt",
+        "?? logs/R03_permission_errors.txt",
+        "?? logs/R04_scalability_benchmark.txt"
+    )
+
+    $actual = @(
+        git status --porcelain --untracked-files=all
+    )
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Git status failed."
+    }
+
+    $difference = @(
+        Compare-Object $expected $actual
+    )
+
+    if ($difference.Count -gt 0) {
+
+        $difference
+
+        throw "Unexpected revision files."
+    }
+
+    foreach ($entry in $actual) {
+        $entry
+    }
+
+    git diff --check
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Whitespace validation failed."
+    }
+
+    "TOTAL REVISION FILES: $($actual.Count)"
+    "PASS: Original application source unchanged"
+    "PASS: Original runtime state protected"
+    "PASS: Documentation and evidence ready"
+    "PASS: R05B completed"
+    "NEXT: R06 final commit and GitHub push"
+state.json
+ M README.md
+ M docs/EVALUATION_EVIDENCE.md
+?? benchmarks/benchmark_scalability.py
+?? docs/FILE_ERROR_RECOVERY.md
+?? docs/OBJECT_ORIENTED_DESIGN.md
+?? docs/SCALABILITY_ANALYSIS.md
+?? logs/R01_revision_baseline.txt
+?? logs/R02_object_oriented_design.txt
+?? logs/R03_permission_errors.txt
+?? logs/R04_scalability_benchmark.txt
+?? tests/test_permission_errors.py
+TOTAL REVISION FILES: 11
+PASS: Original application source unchanged
+PASS: Original runtime state protected
+PASS: Documentation and evidence ready
+PASS: R05B completed
+NEXT: R06 final commit and GitHub push
+Failed: False

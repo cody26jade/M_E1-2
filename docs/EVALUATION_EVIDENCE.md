@@ -24261,3 +24261,151 @@ Repository: https://github.com/cody26jade/M_E1-2
 
 The reproduction log refers to the application commit verified before this evidence-only update.
 The application source and tests are unchanged by this documentation update.
+
+## NEITO Revision - Additional Evaluation Evidence
+
+### Revision Summary
+
+Initial assessment: 15/18 criteria passed.
+
+| Criterion | Revision evidence |
+|---|---|
+| 12 | [Git conventions](OBJECT_ORIENTED_DESIGN.md) |
+| 13 | [Object-oriented design](OBJECT_ORIENTED_DESIGN.md) |
+| 14 | [JSON selection](OBJECT_ORIENTED_DESIGN.md) |
+| 15 | [File error recovery](FILE_ERROR_RECOVERY.md) |
+| 16 | [Scalability analysis](SCALABILITY_ANALYSIS.md) |
+
+### Criterion 13 - Actual Class Reuse
+
+The same Quiz class is reused for all default
+questions. QuizGame manages reusable Quiz objects.
+QuizStorage separates file persistence.
+
+The design provides abstraction, encapsulation,
+reusability, composition, maintainability,
+and independent testing.
+
+Actual verified execution marker:
+
+    PASS: Class reusability demonstrated
+
+- [Quiz source](../quiz.py)
+- [QuizGame source](../quiz_game.py)
+- [Storage source](../storage.py)
+- [Actual execution log](../logs/R02_object_oriented_design.txt)
+
+### Criterion 15 - Actual Permission Error Tests
+
+Eight permission-error tests were added.
+
+    python -m unittest discover -s tests -p test_permission_errors.py -v
+
+Actual verified execution marker:
+
+    PASS: All permission error tests passed
+
+The tests simulate read denial, temporary write
+denial, directory denial, replacement denial,
+error reporting, retry, and reload.
+
+Actual regression result:
+
+    TESTS RUN: 156
+    FAILURES: 0
+    ERRORS: 0
+    PASSED: 156
+
+The tests verify original file preservation
+and successful saving after the simulated
+permission error is removed.
+
+- [Test source](../tests/test_permission_errors.py)
+- [Storage source](../storage.py)
+- [Console source](../main.py)
+- [Actual test log](../logs/R03_permission_errors.txt)
+
+### Criterion 16 - Actual Scalability Measurements
+
+    python -u benchmarks/benchmark_scalability.py
+
+| Questions | Initialize (ms) | Save (ms) | Load (ms) | Search (ms) | Memory (MiB) |
+|---:|---:|---:|---:|---:|---:|
+| 20 | 0.120 | 3.277 | 0.457 | 0.000800 | 0.010 |
+| 100 | 0.853 | 4.752 | 2.189 | 0.002300 | 0.040 |
+| 1000 | 58.887 | 88.155 | 67.151 | 0.019300 | 0.319 |
+| 10000 | 5224.001 | 5125.184 | 5145.996 | 0.181450 | 3.155 |
+
+Actual results:
+
+    PASS: 20 question round trip
+    PASS: 100 question round trip
+    PASS: 1000 question round trip
+    PASS: 10000 question round trip
+    CASES COMPLETED: 4
+    TOTAL BENCHMARK SECONDS: 16.000
+
+Measured growth from 1000 to 10000 questions:
+
+- Initialization: 88.71x
+- JSON save: 58.14x
+- JSON load: 76.63x
+- Linear search: 9.40x
+- Object creation memory: 9.90x
+
+Repeated duplicate checking can cause O(N^2)
+initialization and persistence validation costs.
+Linear lookup is O(N), while dictionary lookup
+is expected to be O(1) on average.
+
+Proposed improvements include dictionary indexing,
+normalized text sets, bulk validation,
+pagination, and SQLite.
+
+Most timings are single-run observations.
+Search is the median of 100 repetitions.
+Memory represents object creation allocations,
+not total process memory.
+
+- [Benchmark source](../benchmarks/benchmark_scalability.py)
+- [Full analysis](SCALABILITY_ANALYSIS.md)
+- [Actual benchmark log](../logs/R04_scalability_benchmark.txt)
+
+### Revision Log Recovery
+
+The original R05 collection attempted to find
+TXT files, but the report engine saves LOG files.
+
+The original four reports were located and
+validated using their actual filenames, titles,
+completion markers, and step results.
+
+All 25 original revision steps passed.
+
+The recovered copies use UTF-8 text and LF
+line endings. Local user-directory names
+are redacted where applicable.
+
+No benchmark values or test outcomes were invented.
+
+### Revision Data Protection
+
+The original application source, default data,
+existing tests, and screenshots were retained.
+
+Permission tests and benchmark tests used
+isolated temporary state files.
+
+- [Baseline verification](../logs/R01_revision_baseline.txt)
+- [Regression verification](../logs/R04_scalability_benchmark.txt)
+
+### Revision Status
+
+The final GitHub upload and NEITO reassessment
+are separate subsequent steps.
+
+### Final Revision Verification Record
+
+The recovered revision evidence was validated successfully.
+
+- [R05B final evidence verification](../logs/R05B_evaluation_evidence.txt)

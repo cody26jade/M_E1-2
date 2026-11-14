@@ -1,0 +1,1139 @@
+CODYSSEY MISSION REPORT SYSTEM
+M_E1-2 R04 - Large Scale Performance Benchmark
+Date: 2026-11-15 00:18:41
+
+01. Verify Benchmark Environment
+
+> $code = @'
+import os
+import platform
+import sys
+import time
+import tracemalloc
+
+from quiz import Quiz
+from quiz_game import QuizGame
+from storage import QuizStorage
+
+print("PYTHON:", platform.python_version())
+print("OS:", platform.system())
+print("OS RELEASE:", platform.release())
+print("ARCHITECTURE:", platform.machine())
+print("PROCESSOR:", platform.processor())
+print("LOGICAL CPU COUNT:", os.cpu_count())
+print("TIMER:", time.get_clock_info("perf_counter"))
+print("TEST SIZES: 20, 100, 1000, 10000")
+print("STANDARD LIBRARY ONLY")
+
+assert sys.version_info >= (3, 10)
+
+assert callable(Quiz.from_dict)
+assert callable(QuizGame.list_quizzes)
+assert callable(QuizGame.start_game)
+assert callable(QuizStorage.save)
+assert callable(QuizStorage.load)
+
+print("PASS: Benchmark environment verified")
+'@
+
+    $code | python -
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Benchmark environment failed."
+    }
+PYTHON: 3.12.10
+OS: Windows
+OS RELEASE: 11
+ARCHITECTURE: AMD64
+PROCESSOR: AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD
+LOGICAL CPU COUNT: 16
+TIMER: namespace(implementation='QueryPerformanceCounter()', monotonic=True, adjustable=False, resolution=1e-07)
+TEST SIZES: 20, 100, 1000, 10000
+STANDARD LIBRARY ONLY
+PASS: Benchmark environment verified
+Failed: False
+
+02. Create Reproducible Benchmark Script
+
+> New-Item `
+        -ItemType Directory `
+        -Path "benchmarks" `
+        -Force | Out-Null
+
+    $code = @'
+"""Measure scalability of the actual quiz application."""
+
+import argparse
+import gc
+import json
+import os
+import platform
+import random
+import statistics
+import sys
+import tempfile
+import time
+import tracemalloc
+
+from datetime import datetime
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+sys.path.insert(0, str(ROOT))
+
+from quiz import Quiz
+from quiz_game import QuizGame
+from storage import QuizStorage
+
+
+SIZES = (20, 100, 1000, 10000)
+SESSION_SIZE = 10
+SEARCH_REPEATS = 100
+SEED = 20261115
+
+DEFAULT_PATH = ROOT / "data/default_quizzes.json"
+
+DOCUMENT_PATH = (
+    ROOT / "docs/SCALABILITY_ANALYSIS.md"
+)
+
+
+def timed(function, *args, **kwargs):
+
+    start = time.perf_counter()
+
+    result = function(
+        *args,
+        **kwargs
+    )
+
+    elapsed = (
+        time.perf_counter() - start
+    ) * 1000
+
+    return result, elapsed
+
+
+def create_quizzes(count, template):
+
+    quizzes = []
+
+    for index in range(1, count + 1):
+
+        item = dict(template)
+
+        item["id"] = index
+
+        item["question"] = (
+            f"Benchmark question {index:06d}"
+        )
+
+        item["choices"] = list(
+            template["choices"]
+        )
+
+        quizzes.append(
+            Quiz.from_dict(item)
+        )
+
+    return quizzes
+
+
+def search_by_id(quizzes, target):
+
+    return next(
+        (
+            quiz
+            for quiz in quizzes
+            if quiz.id == target
+        ),
+        None
+    )
+
+
+def measure_search(quizzes, target):
+
+    measurements = []
+
+    for _ in range(SEARCH_REPEATS):
+
+        found, elapsed = timed(
+            search_by_id,
+            quizzes,
+            target
+        )
+
+        assert found is not None
+        assert found.id == target
+
+        measurements.append(elapsed)
+
+    return statistics.median(
+        measurements
+    )
+
+
+def measure_object_memory(count, template):
+
+    gc.collect()
+
+    tracemalloc.start()
+
+    try:
+
+        quizzes = create_quizzes(
+            count,
+            template
+        )
+
+        assert len(quizzes) == count
+
+        current, peak = (
+            tracemalloc.get_traced_memory()
+        )
+
+        return peak / (1024 ** 2)
+
+    finally:
+
+        tracemalloc.stop()
+
+
+def run_case(count, template):
+
+    print(
+        f"\nCASE: {count} QUESTIONS",
+        flush=True
+    )
+
+    random.seed(SEED)
+
+    gc.collect()
+
+    quizzes, create_ms = timed(
+        create_quizzes,
+        count,
+        template
+    )
+
+    assert len(quizzes) == count
+
+    print(
+        f"CREATE OBJECTS: {create_ms:.6f} ms",
+        flush=True
+    )
+
+    game, init_ms = timed(
+        QuizGame,
+        quizzes
+    )
+
+    print(
+        f"INITIALIZE GAME: {init_ms:.6f} ms",
+        flush=True
+    )
+
+    listed, list_ms = timed(
+        game.list_quizzes
+    )
+
+    assert len(listed) == count
+
+    print(
+        f"LIST QUESTIONS: {list_ms:.6f} ms",
+        flush=True
+    )
+
+    search_ms = measure_search(
+        listed,
+        count
+    )
+
+    print(
+        f"SEARCH LAST ID: {search_ms:.6f} ms",
+        flush=True
+    )
+
+    _, random_ms = timed(
+        game.start_game,
+        count=SESSION_SIZE
+    )
+
+    assert game.is_active
+
+    assert game.current_quiz is not None
+
+    print(
+        f"RANDOM SESSION: {random_ms:.6f} ms",
+        flush=True
+    )
+
+    game.cancel_game()
+
+    assert not game.is_active
+
+    with tempfile.TemporaryDirectory() as directory:
+
+        path = (
+            Path(directory)
+            / "state.json"
+        )
+
+        storage = QuizStorage(
+            path=path
+        )
+
+        _, save_ms = timed(
+            storage.save,
+            game
+        )
+
+        assert path.is_file()
+
+        size_kib = (
+            path.stat().st_size / 1024
+        )
+
+        print(
+            f"JSON SAVE: {save_ms:.6f} ms",
+            flush=True
+        )
+
+        restored, load_ms = timed(
+            storage.load
+        )
+
+        print(
+            f"JSON LOAD: {load_ms:.6f} ms",
+            flush=True
+        )
+
+        restored_quizzes = (
+            restored.list_quizzes()
+        )
+
+        assert len(restored_quizzes) == count
+
+        expected = [
+            quiz.to_dict()
+            for quiz in listed
+        ]
+
+        actual = [
+            quiz.to_dict()
+            for quiz in restored_quizzes
+        ]
+
+        assert actual == expected
+
+        assert (
+            restored.best_score
+            == game.best_score
+        )
+
+        assert not path.with_name(
+            "state.json.tmp"
+        ).exists()
+
+    memory_mib = measure_object_memory(
+        count,
+        template
+    )
+
+    print(
+        f"OBJECT MEMORY PEAK: {memory_mib:.6f} MiB",
+        flush=True
+    )
+
+    print(
+        f"JSON FILE SIZE: {size_kib:.6f} KiB",
+        flush=True
+    )
+
+    print(
+        f"PASS: {count} question round trip",
+        flush=True
+    )
+
+    return {
+        "count": count,
+        "create_ms": create_ms,
+        "init_ms": init_ms,
+        "list_ms": list_ms,
+        "search_ms": search_ms,
+        "random_ms": random_ms,
+        "save_ms": save_ms,
+        "load_ms": load_ms,
+        "memory_mib": memory_mib,
+        "size_kib": size_kib,
+    }
+
+
+def write_document(results, elapsed):
+
+    timestamp = datetime.now().isoformat(
+        timespec="seconds"
+    )
+
+    lines = [
+        "# Large-Scale Quiz Performance Analysis",
+        "",
+        "## 1. Purpose",
+        "",
+        "This document addresses NEITO criterion 16.",
+        "It evaluates performance, memory consumption,",
+        "search cost, bottlenecks, and scalability.",
+        "",
+        "## 2. Actual Benchmark Environment",
+        "",
+        f"- Measurement time: {timestamp}",
+        f"- Python: {platform.python_version()}",
+        f"- OS: {platform.system()} {platform.release()}",
+        f"- Architecture: {platform.machine()}",
+        f"- Processor: {platform.processor()}",
+        f"- Logical CPU count: {os.cpu_count()}",
+        f"- Total benchmark time: {elapsed:.3f} seconds",
+        "",
+        "## 3. Reproduction Method",
+        "",
+        "Source: [benchmark_scalability.py]"
+        "(../benchmarks/benchmark_scalability.py)",
+        "",
+        "Run from the project root:",
+        "",
+        "    python -u benchmarks/benchmark_scalability.py",
+        "",
+        "The benchmark uses the actual Quiz, QuizGame,",
+        "and QuizStorage classes.",
+        "",
+        "Synthetic questions are generated from one",
+        "default question template with unique IDs",
+        "and unique question text.",
+        "",
+        "Question counts: 20, 100, 1000, and 10000.",
+        "",
+        "Each case measures a single execution of",
+        "object creation, game initialization, listing,",
+        "random session creation, saving, and loading.",
+        "",
+        "Search time is the median of 100 linear",
+        "searches for the final question ID in a",
+        "previously obtained question list.",
+        "",
+        "The search is a benchmark helper, not a claim",
+        "that the console has an ID-search menu.",
+        "",
+        "Memory is measured separately using tracemalloc",
+        "during question-object creation only.",
+        "",
+        "The random session contains ten questions.",
+        f"The random seed is {SEED}.",
+        "",
+        "All state files are written to temporary",
+        "directories. The real state.json is not used.",
+        "",
+        "## 4. Actual Measured Processing Times",
+        "",
+        "All values are milliseconds (ms).",
+        "",
+        "| Questions | Create | Initialize | List | Search | Random | Save | Load |",
+        "|---:|---:|---:|---:|---:|---:|---:|---:|",
+    ]
+
+    for row in results:
+
+        lines.append(
+            f"| {row['count']} "
+            f"| {row['create_ms']:.6f} "
+            f"| {row['init_ms']:.6f} "
+            f"| {row['list_ms']:.6f} "
+            f"| {row['search_ms']:.6f} "
+            f"| {row['random_ms']:.6f} "
+            f"| {row['save_ms']:.6f} "
+            f"| {row['load_ms']:.6f} |"
+        )
+
+    lines.extend([
+        "",
+        "## 5. Actual Memory and File Size",
+        "",
+        "| Questions | Object creation peak (MiB) | JSON size (KiB) |",
+        "|---:|---:|---:|",
+    ])
+
+    for row in results:
+
+        lines.append(
+            f"| {row['count']} "
+            f"| {row['memory_mib']:.6f} "
+            f"| {row['size_kib']:.6f} |"
+        )
+
+    small = next(
+        row for row in results
+        if row["count"] == 1000
+    )
+
+    large = next(
+        row for row in results
+        if row["count"] == 10000
+    )
+
+    lines.extend([
+        "",
+        "## 6. Measured Scaling from 1000 to 10000",
+        "",
+        "The number of questions increased tenfold.",
+        "",
+        "| Metric | Measured growth factor |",
+        "|---|---:|",
+    ])
+
+    metrics = (
+        ("Game initialization", "init_ms"),
+        ("Question listing", "list_ms"),
+        ("Linear search", "search_ms"),
+        ("Random session", "random_ms"),
+        ("JSON save", "save_ms"),
+        ("JSON load", "load_ms"),
+        ("Object creation memory", "memory_mib"),
+        ("JSON file size", "size_kib"),
+    )
+
+    for label, key in metrics:
+
+        baseline = small[key]
+
+        if baseline > 0:
+
+            ratio = large[key] / baseline
+
+            lines.append(
+                f"| {label} | {ratio:.3f}x |"
+            )
+
+        else:
+
+            lines.append(
+                f"| {label} | N/A |"
+            )
+
+    timing_keys = (
+        ("Object creation", "create_ms"),
+        ("Game initialization", "init_ms"),
+        ("Question listing", "list_ms"),
+        ("Linear search", "search_ms"),
+        ("Random session", "random_ms"),
+        ("JSON save", "save_ms"),
+        ("JSON load", "load_ms"),
+    )
+
+    label, key = max(
+        timing_keys,
+        key=lambda item: large[item[1]]
+    )
+
+    lines.extend([
+        "",
+        "## 7. Observed Bottleneck",
+        "",
+        f"At 10000 questions, {label} had the",
+        "largest measured time among the listed",
+        "operations in this benchmark:",
+        f"{large[key]:.6f} ms.",
+        "",
+        "The measured timings are observations from",
+        "this machine, not universal guarantees.",
+        "",
+        "## 8. Algorithmic Complexity",
+        "",
+        "N is the number of questions.",
+        "K is the number of selected questions.",
+        "",
+        "Assumptions: bounded question text length",
+        "and bounded play-history size.",
+        "",
+        "| Operation | Current expected complexity |",
+        "|---|---|",
+        "| Create N Quiz objects | O(N) |",
+        "| Add one question with duplicate checks | O(N) |",
+        "| Sequential initialization | O(N^2) |",
+        "| List and copy questions | O(N) |",
+        "| Linear ID search | O(N) |",
+        "| Random session preparation | O(N + K) |",
+        "| JSON save with repeated validation | O(N^2) |",
+        "| JSON load with repeated validation | O(N^2) |",
+        "| Question storage memory | O(N) |",
+        "",
+        "The QuizGame constructor repeatedly calls",
+        "add_quiz(), which checks existing questions.",
+        "",
+        "A simple sequential duplicate-check model",
+        "has N * (N - 1) / 2 comparisons.",
+        "",
+        "At N = 10000 this model yields 49995000",
+        "comparisons. This is a theoretical model,",
+        "not an instrumented comparison count.",
+        "",
+        "JSON serialization itself is linear in the",
+        "serialized data size. Repeated application",
+        "validation can increase the overall cost.",
+        "",
+        "## 9. Proposed Scalability Improvements",
+        "",
+        "| Bottleneck | Proposed improvement |",
+        "|---|---|",
+        "| Repeated ID checks | Maintain a dictionary indexed by ID |",
+        "| Repeated text checks | Maintain a normalized question set |",
+        "| Linear lookup | Use a dictionary or database index |",
+        "| Repeated validation | Validate once during bulk loading |",
+        "| Full JSON rewrites | Consider SQLite transactions |",
+        "| Large console lists | Pagination and filtering |",
+        "| Large object collections | Lazy loading where appropriate |",
+        "",
+        "Dictionary and set membership have average",
+        "O(1) lookup complexity under normal hashing",
+        "conditions, rather than a full linear scan.",
+        "",
+        "An indexed bulk initialization strategy",
+        "could reduce repeated duplicate checking",
+        "from quadratic to approximately linear time.",
+        "",
+        "Indexes require additional memory and must",
+        "remain consistent after insertion and deletion.",
+        "",
+        "SQLite can provide indexed queries and",
+        "transactional updates for larger datasets.",
+        "",
+        "These are proposed future improvements.",
+        "They are not implemented or benchmarked",
+        "as part of this revision.",
+        "",
+        "## 10. Validation and Data Integrity",
+        "",
+    ])
+
+    for row in results:
+
+        lines.append(
+            f"- PASS: {row['count']} question round trip"
+        )
+
+    lines.extend([
+        "",
+        "Each case verified question count, ID lookup,",
+        "session startup, save and reload, all question",
+        "data, and best-score preservation.",
+        "",
+        "## 11. Limitations",
+        "",
+        "- Most timings are single-run observations.",
+        "- Search is measured using 100 repetitions.",
+        "- Synthetic questions have similar lengths.",
+        "- The benchmark does not simulate concurrent users.",
+        "- Memory is traced Python object allocation only.",
+        "- It is not total process memory or peak game memory.",
+        "- Timing runs do not enable tracemalloc.",
+        "- Disk caching and background tasks can affect results.",
+        "- No production latency requirement was specified.",
+        "- Results do not establish a maximum supported size.",
+        "",
+        "## 12. Conclusion",
+        "",
+        "The benchmark provides measured evidence for",
+        "20, 100, 1000, and 10000 questions.",
+        "",
+        "The application can be evaluated beyond its",
+        "original twenty-question educational dataset.",
+        "",
+        "Repeated duplicate validation is a potential",
+        "scalability bottleneck. Indexed lookup and",
+        "bulk validation are recommended before",
+        "deploying much larger question banks.",
+        "",
+        "NEITO criterion 16 is addressed through actual",
+        "performance measurements, memory measurements,",
+        "search analysis, complexity analysis, and",
+        "explicit future scalability strategies.",
+        "",
+    ])
+
+    DOCUMENT_PATH.write_text(
+        "\n".join(lines),
+        encoding="utf-8",
+        newline="\n"
+    )
+
+
+def main():
+
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument(
+        "--smoke",
+        action="store_true",
+        help="Run only 20 questions without writing a report."
+    )
+
+    args = parser.parse_args()
+
+    defaults = json.loads(
+        DEFAULT_PATH.read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert len(defaults) == 20
+
+    template = defaults[0]
+
+    sizes = (
+        (20,)
+        if args.smoke
+        else SIZES
+    )
+
+    start = time.perf_counter()
+
+    results = [
+        run_case(count, template)
+        for count in sizes
+    ]
+
+    elapsed = (
+        time.perf_counter() - start
+    )
+
+    if not args.smoke:
+
+        write_document(
+            results,
+            elapsed
+        )
+
+        print(
+            "CREATED:",
+            "docs/SCALABILITY_ANALYSIS.md"
+        )
+
+    print("\nBENCHMARK SUMMARY")
+
+    for row in results:
+
+        print(
+            "RESULT:",
+            json.dumps(
+                row,
+                sort_keys=True
+            )
+        )
+
+    print("CASES COMPLETED:", len(results))
+
+    print(
+        "TOTAL BENCHMARK SECONDS:",
+        f"{elapsed:.3f}"
+    )
+
+    print(
+        "PASS: All benchmark cases verified"
+    )
+
+
+if __name__ == "__main__":
+    main()
+'@
+
+    $code = $code -replace "`r`n", "`n"
+    $code = $code.TrimEnd() + "`n"
+
+    [System.IO.File]::WriteAllText(
+        (Join-Path $root $benchmarkPath),
+        $code,
+        $utf8
+    )
+
+    "CREATED: $benchmarkPath"
+    "PASS: Benchmark script created"
+CREATED: benchmarks/benchmark_scalability.py
+PASS: Benchmark script created
+Failed: False
+
+03. Run Small Scale Smoke Test
+
+> python -m py_compile $benchmarkPath
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Benchmark syntax check failed."
+    }
+
+    python -u $benchmarkPath --smoke
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Benchmark smoke test failed."
+    }
+
+    if (Test-Path $documentPath) {
+        throw "Smoke test unexpectedly created report."
+    }
+
+    "PASS: Small scale benchmark verified"
+
+CASE: 20 QUESTIONS
+CREATE OBJECTS: 0.098800 ms
+INITIALIZE GAME: 0.126900 ms
+LIST QUESTIONS: 0.042400 ms
+SEARCH LAST ID: 0.000800 ms
+RANDOM SESSION: 0.104700 ms
+JSON SAVE: 2.849700 ms
+JSON LOAD: 0.485700 ms
+OBJECT MEMORY PEAK: 0.009926 MiB
+JSON FILE SIZE: 12.114258 KiB
+PASS: 20 question round trip
+
+BENCHMARK SUMMARY
+RESULT: {"count": 20, "create_ms": 0.09880001016426831, "init_ms": 0.1269000058528036, "list_ms": 0.042400002712383866, "load_ms": 0.48570000217296183, "memory_mib": 0.00992584228515625, "random_ms": 0.10470001143403351, "save_ms": 2.849700002116151, "search_ms": 0.000800006091594696, "size_kib": 12.1142578125}
+CASES COMPLETED: 1
+TOTAL BENCHMARK SECONDS: 0.013
+PASS: All benchmark cases verified
+PASS: Small scale benchmark verified
+Failed: False
+
+04. Run Full Scalability Benchmark
+
+> python -u $benchmarkPath
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Full benchmark failed."
+    }
+
+    if (-not (Test-Path $documentPath)) {
+        throw "Benchmark report missing."
+    }
+
+    "PASS: Full scalability benchmark completed"
+
+CASE: 20 QUESTIONS
+CREATE OBJECTS: 0.098000 ms
+INITIALIZE GAME: 0.120300 ms
+LIST QUESTIONS: 0.040600 ms
+SEARCH LAST ID: 0.000800 ms
+RANDOM SESSION: 0.100200 ms
+JSON SAVE: 3.276600 ms
+JSON LOAD: 0.456600 ms
+OBJECT MEMORY PEAK: 0.009926 MiB
+JSON FILE SIZE: 12.114258 KiB
+PASS: 20 question round trip
+
+CASE: 100 QUESTIONS
+CREATE OBJECTS: 0.244700 ms
+INITIALIZE GAME: 0.852900 ms
+LIST QUESTIONS: 0.203100 ms
+SEARCH LAST ID: 0.002300 ms
+RANDOM SESSION: 0.238100 ms
+JSON SAVE: 4.751500 ms
+JSON LOAD: 2.189500 ms
+OBJECT MEMORY PEAK: 0.039551 MiB
+JSON FILE SIZE: 60.240234 KiB
+PASS: 100 question round trip
+
+CASE: 1000 QUESTIONS
+CREATE OBJECTS: 2.611900 ms
+INITIALIZE GAME: 58.887000 ms
+LIST QUESTIONS: 1.919700 ms
+SEARCH LAST ID: 0.019300 ms
+RANDOM SESSION: 2.453600 ms
+JSON SAVE: 88.154700 ms
+JSON LOAD: 67.151400 ms
+OBJECT MEMORY PEAK: 0.318733 MiB
+JSON FILE SIZE: 602.526367 KiB
+PASS: 1000 question round trip
+
+CASE: 10000 QUESTIONS
+CREATE OBJECTS: 30.088600 ms
+INITIALIZE GAME: 5224.001400 ms
+LIST QUESTIONS: 19.401400 ms
+SEARCH LAST ID: 0.181450 ms
+RANDOM SESSION: 19.899300 ms
+JSON SAVE: 5125.183700 ms
+JSON LOAD: 5145.995700 ms
+OBJECT MEMORY PEAK: 3.155266 MiB
+JSON FILE SIZE: 6034.167969 KiB
+PASS: 10000 question round trip
+CREATED: docs/SCALABILITY_ANALYSIS.md
+
+BENCHMARK SUMMARY
+RESULT: {"count": 20, "create_ms": 0.09800000407267362, "init_ms": 0.12029999925289303, "list_ms": 0.04060000355821103, "load_ms": 0.4565999988699332, "memory_mib": 0.00992584228515625, "random_ms": 0.10019999172072858, "save_ms": 3.2765999931143597, "search_ms": 0.000800006091594696, "size_kib": 12.1142578125}
+RESULT: {"count": 100, "create_ms": 0.24470000062137842, "init_ms": 0.8528999896952882, "list_ms": 0.20309998944867402, "load_ms": 2.189499995438382, "memory_mib": 0.03955078125, "random_ms": 0.2381000085733831, "save_ms": 4.75150000420399, "search_ms": 0.0023000029614195228, "size_kib": 60.240234375}
+RESULT: {"count": 1000, "create_ms": 2.611899995827116, "init_ms": 58.886999991955236, "list_ms": 1.9197000074200332, "load_ms": 67.1513999986928, "memory_mib": 0.31873321533203125, "random_ms": 2.4536000128136948, "save_ms": 88.15470000263304, "search_ms": 0.01930000144056976, "size_kib": 602.5263671875}
+RESULT: {"count": 10000, "create_ms": 30.08860000409186, "init_ms": 5224.001399998087, "list_ms": 19.40140000078827, "load_ms": 5145.995700004278, "memory_mib": 3.1552658081054688, "random_ms": 19.899299993994646, "save_ms": 5125.183700001799, "search_ms": 0.1814499992178753, "size_kib": 6034.16796875}
+CASES COMPLETED: 4
+TOTAL BENCHMARK SECONDS: 16.000
+PASS: All benchmark cases verified
+PASS: Full scalability benchmark completed
+Failed: False
+
+05. Verify Actual Performance Report
+
+> $code = @'
+import math
+import re
+
+from pathlib import Path
+
+path = Path(
+    "docs/SCALABILITY_ANALYSIS.md"
+)
+
+text = path.read_text(
+    encoding="utf-8"
+)
+
+required = [
+    "Actual Measured Processing Times",
+    "Actual Memory and File Size",
+    "Measured Scaling from 1000 to 10000",
+    "Observed Bottleneck",
+    "Algorithmic Complexity",
+    "Proposed Scalability Improvements",
+    "O(N^2)",
+    "O(1)",
+    "SQLite",
+    "NEITO criterion 16",
+    "Limitations",
+]
+
+for marker in required:
+
+    assert marker in text, marker
+
+    print("VERIFIED:", marker)
+
+for count in (20, 100, 1000, 10000):
+
+    marker = (
+        f"PASS: {count} question round trip"
+    )
+
+    assert marker in text
+
+    pattern = (
+        rf"^\| {count} "
+        rf"\| (.+) \|$"
+    )
+
+    rows = re.findall(
+        pattern,
+        text,
+        re.MULTILINE
+    )
+
+    assert len(rows) == 2
+
+    expected_lengths = (7, 2)
+
+    for row, length in zip(
+        rows,
+        expected_lengths
+    ):
+
+        values = [
+            float(item.strip())
+            for item in row.split("|")
+        ]
+
+        assert len(values) == length
+
+        assert all(
+            math.isfinite(value)
+            and value >= 0
+            for value in values
+        )
+
+    print("MEASURED CASE VERIFIED:", count)
+
+raw = path.read_bytes()
+
+assert b"\r" not in raw
+
+assert not raw.startswith(
+    b"\xef\xbb\xbf"
+)
+
+print("BENCHMARK CASES:", 4)
+print("PASS: Actual measurement tables verified")
+print("PASS: Scalability analysis verified")
+'@
+
+    $code | python -
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Performance report verification failed."
+    }
+VERIFIED: Actual Measured Processing Times
+VERIFIED: Actual Memory and File Size
+VERIFIED: Measured Scaling from 1000 to 10000
+VERIFIED: Observed Bottleneck
+VERIFIED: Algorithmic Complexity
+VERIFIED: Proposed Scalability Improvements
+VERIFIED: O(N^2)
+VERIFIED: O(1)
+VERIFIED: SQLite
+VERIFIED: NEITO criterion 16
+VERIFIED: Limitations
+MEASURED CASE VERIFIED: 20
+MEASURED CASE VERIFIED: 100
+MEASURED CASE VERIFIED: 1000
+MEASURED CASE VERIFIED: 10000
+BENCHMARK CASES: 4
+PASS: Actual measurement tables verified
+PASS: Scalability analysis verified
+Failed: False
+
+06. Verify All Regression Tests
+
+> $code = @'
+import unittest
+
+suite = unittest.defaultTestLoader.discover(
+    "tests"
+)
+
+assert suite.countTestCases() == 156
+
+result = unittest.TextTestRunner(
+    verbosity=1
+).run(suite)
+
+passed = (
+    result.testsRun
+    - len(result.failures)
+    - len(result.errors)
+    - len(result.skipped)
+    - len(result.expectedFailures)
+    - len(result.unexpectedSuccesses)
+)
+
+print("TESTS RUN:", result.testsRun)
+print("FAILURES:", len(result.failures))
+print("ERRORS:", len(result.errors))
+print("SKIPPED:", len(result.skipped))
+print("PASSED:", passed)
+
+raise SystemExit(
+    0 if result.wasSuccessful()
+    and passed == 156
+    else 1
+)
+'@
+
+    $code | python - 2>&1
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Regression tests failed."
+    }
+
+    "PASS: All 156 regression tests verified"
+python : ............................................................................................................................................................
+위치 줄:967 문자:13
++     $code | python - 2>&1
++             ~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (.................................:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+----------------------------------------------------------------------
+Ran 156 tests in 0.265s
+
+OK
+TESTS RUN: 156
+FAILURES: 0
+ERRORS: 0
+SKIPPED: 0
+PASSED: 156
+PASS: All 156 regression tests verified
+Failed: False
+
+07. Verify Application and Data Protection
+
+> git diff --exit-code HEAD -- `
+        main.py `
+        quiz.py `
+        quiz_game.py `
+        storage.py `
+        history.py `
+        console_ui.py `
+        data `
+        tests `
+        screenshots
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Existing application files changed."
+    }
+
+    if ($null -ne $stateBefore) {
+
+        if (-not (Test-Path "state.json")) {
+            throw "Original runtime state missing."
+        }
+
+        $after = (
+            Get-FileHash state.json -Algorithm SHA256
+        ).Hash
+
+        if ($after -ne $stateBefore) {
+            throw "Original runtime state changed."
+        }
+
+    } elseif (Test-Path "state.json") {
+
+        throw "Unexpected runtime state creation."
+    }
+
+    $expected = @(
+        "?? docs/OBJECT_ORIENTED_DESIGN.md",
+        "?? docs/FILE_ERROR_RECOVERY.md",
+        "?? tests/test_permission_errors.py",
+        "?? benchmarks/benchmark_scalability.py",
+        "?? docs/SCALABILITY_ANALYSIS.md"
+    )
+
+    $actual = @(
+        git status --porcelain --untracked-files=all
+    )
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Git status failed."
+    }
+
+    $difference = @(
+        Compare-Object `
+            -ReferenceObject $expected `
+            -DifferenceObject $actual
+    )
+
+    if ($difference.Count -gt 0) {
+        throw "Unexpected working tree changes."
+    }
+
+    foreach ($entry in $actual) {
+        $entry
+    }
+
+    "PASS: Existing application source unchanged"
+    "PASS: Original runtime state protected"
+    "PASS: Only approved revision files created"
+    "PASS: R04 completed"
+    "NEXT: R05 consolidated evaluation documentation"
+?? benchmarks/benchmark_scalability.py
+?? docs/FILE_ERROR_RECOVERY.md
+?? docs/OBJECT_ORIENTED_DESIGN.md
+?? docs/SCALABILITY_ANALYSIS.md
+?? tests/test_permission_errors.py
+PASS: Existing application source unchanged
+PASS: Original runtime state protected
+PASS: Only approved revision files created
+PASS: R04 completed
+NEXT: R05 consolidated evaluation documentation
+Failed: False

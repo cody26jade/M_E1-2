@@ -447,3 +447,145 @@ of a Git whitespace validation failure.
 
 Only document formatting was normalized.
 Application source and runtime data were preserved.
+
+## NEITO Revision - Additional Evaluation Evidence
+
+Initial NEITO assessment: 15 of 18 criteria passed.
+
+This revision addresses criteria 13, 15, and 16
+and adds explanations for criteria 12 and 14.
+
+### Current Test Status
+
+The original 148 tests are retained.
+Eight permission-error tests were added.
+
+- Tests run: 156
+- Passed: 156
+- Failures: 0
+- Errors: 0
+
+Earlier test counts describe historical milestones.
+
+### Criterion 12 - Git Commit Convention
+
+Feat adds functionality, Fix corrects defects,
+Docs updates documentation, and Refactor improves
+internal structure without intentionally changing
+external behavior. Test identifies test changes.
+
+### Criterion 13 - Why Classes Are Used
+
+Quiz encapsulates question data and reusable
+validation and answer-checking behavior.
+
+QuizGame abstracts game operations and manages
+a collection of Quiz objects independently of
+the console user interface.
+
+QuizStorage separates persistence responsibilities.
+
+This separation improves abstraction, encapsulation,
+reusability, maintainability, and testability.
+
+The same Quiz class was reused for all 20 default
+questions. Serialization and reconstruction were
+verified using the existing class implementation.
+
+[Object-oriented design](docs/OBJECT_ORIENTED_DESIGN.md)
+
+### Criterion 14 - Why JSON Is Used
+
+JSON is human-readable and language-independent.
+It supports structured data, UTF-8 text, and
+standard tools across programming languages.
+Python provides built-in JSON support.
+
+### Criterion 15 - File Permission Error Handling
+
+PermissionError is a subclass of OSError.
+The application reports save failures and allows
+saving to be retried after access is restored.
+
+Temporary-file-based replacement protects the
+original state in the tested failure scenarios.
+
+Eight automated tests cover permission errors,
+original file preservation, error messages,
+retry, and successful reload.
+
+These tests simulate permission errors rather
+than modifying actual Windows access permissions.
+
+[File error recovery](docs/FILE_ERROR_RECOVERY.md)
+
+[Permission tests](tests/test_permission_errors.py)
+
+### Criterion 16 - Large-Scale Performance
+
+The actual application was benchmarked using
+20, 100, 1000, and 10000 synthetic questions.
+
+| Questions | Initialize (ms) | Save (ms) | Load (ms) | Search (ms) | Memory (MiB) |
+|---:|---:|---:|---:|---:|---:|
+| 20 | 0.120 | 3.277 | 0.457 | 0.000800 | 0.010 |
+| 100 | 0.853 | 4.752 | 2.189 | 0.002300 | 0.040 |
+| 1000 | 58.887 | 88.155 | 67.151 | 0.019300 | 0.319 |
+| 10000 | 5224.001 | 5125.184 | 5145.996 | 0.181450 | 3.155 |
+
+Total benchmark time: 16.000 seconds.
+
+All four save-and-reload cases passed.
+
+Repeated duplicate validation is a scalability
+bottleneck. Initialization and JSON persistence
+become slower as the dataset grows.
+
+Linear search is O(N). Dictionary lookup is
+expected to be O(1) on average.
+
+Future improvements include dictionary indexing,
+normalized question sets, bulk validation,
+pagination, and SQLite persistence.
+
+These improvements are proposed, not implemented.
+
+Memory represents traced Python allocations during
+Quiz object creation, not total process memory.
+
+[Actual scalability analysis](docs/SCALABILITY_ANALYSIS.md)
+
+[Benchmark source](benchmarks/benchmark_scalability.py)
+
+### Reproduce Additional Tests
+
+Run from the project root:
+
+    python -m unittest discover -s tests -v
+
+    python -m unittest discover -s tests -p test_permission_errors.py -v
+
+    python -u benchmarks/benchmark_scalability.py
+
+The benchmark uses temporary state files and
+regenerates the scalability analysis document.
+
+### Actual Revision Execution Records
+
+- [R01 baseline](logs/R01_revision_baseline.txt)
+- [R02 class reuse](logs/R02_object_oriented_design.txt)
+- [R03 permission tests](logs/R03_permission_errors.txt)
+- [R04 performance benchmark](logs/R04_scalability_benchmark.txt)
+
+[Consolidated evaluation evidence](docs/EVALUATION_EVIDENCE.md)
+
+The original application source and runtime
+state were preserved during revision tests.
+
+The final NEITO reassessment remains pending.
+
+### Final Revision Verification Record
+
+The recovered revision evidence was validated successfully.
+
+- [R05B final evidence verification](logs/R05B_evaluation_evidence.txt)

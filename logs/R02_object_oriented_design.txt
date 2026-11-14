@@ -1,0 +1,671 @@
+CODYSSEY MISSION REPORT SYSTEM
+M_E1-2 R02 - Object Oriented Design
+Date: 2026-11-15 00:13:49
+
+01. Verify Object Oriented Design Baseline
+
+> $code = @'
+from quiz import Quiz
+from quiz_game import QuizGame
+from storage import QuizStorage
+
+for cls in (Quiz, QuizGame, QuizStorage):
+
+    print("CLASS:", cls.__name__)
+
+    for name in sorted(cls.__dict__):
+
+        if not name.startswith("_"):
+
+            if callable(getattr(cls, name)):
+                print("  METHOD:", name)
+
+assert callable(Quiz.check_answer)
+assert callable(Quiz.to_dict)
+assert callable(Quiz.from_dict)
+assert callable(QuizGame.add_quiz)
+assert callable(QuizGame.list_quizzes)
+assert callable(QuizGame.start_game)
+assert callable(QuizStorage.load)
+assert callable(QuizStorage.save)
+
+print("PASS: Existing class interfaces verified")
+'@
+
+    $code | python -
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Class interface verification failed."
+    }
+CLASS: Quiz
+  METHOD: check_answer
+  METHOD: from_dict
+  METHOD: get_correct_choice
+  METHOD: get_explanation
+  METHOD: get_hint
+  METHOD: shuffled
+  METHOD: to_dict
+  METHOD: validate
+CLASS: QuizGame
+  METHOD: add_quiz
+  METHOD: cancel_game
+  METHOD: get_result
+  METHOD: list_quizzes
+  METHOD: load_default_quizzes
+  METHOD: next_quiz_id
+  METHOD: start_game
+  METHOD: submit_answer
+  METHOD: use_hint
+CLASS: QuizStorage
+  METHOD: backup_corrupt_state
+  METHOD: decode_state
+  METHOD: load
+  METHOD: load_defaults
+  METHOD: save
+  METHOD: validate_score
+PASS: Existing class interfaces verified
+Failed: False
+
+02. Demonstrate Class Reusability
+
+> $code = @'
+import json
+
+from pathlib import Path
+from quiz import Quiz
+from quiz_game import QuizGame
+
+data = json.loads(
+    Path("data/default_quizzes.json").read_text(
+        encoding="utf-8"
+    )
+)
+
+assert len(data) == 20
+
+quizzes = [
+    Quiz.from_dict(item)
+    for item in data
+]
+
+assert all(
+    isinstance(quiz, Quiz)
+    for quiz in quizzes
+)
+
+assert len({
+    id(quiz)
+    for quiz in quizzes
+}) == 20
+
+for quiz in quizzes:
+
+    assert quiz.check_answer(quiz.answer)
+
+    restored = Quiz.from_dict(
+        quiz.to_dict()
+    )
+
+    assert restored.to_dict() == quiz.to_dict()
+    assert restored is not quiz
+
+    print(
+        "QUIZ ID:",
+        quiz.id,
+        "| CLASS:",
+        type(quiz).__name__,
+        "| CORRECT ANSWER CHECK: PASS",
+        "| ROUND TRIP: PASS"
+    )
+
+game = QuizGame(quizzes)
+
+assert len(game.list_quizzes()) == 20
+
+print("TOTAL QUIZ OBJECTS:", len(quizzes))
+print("SHARED CLASS:", Quiz.__name__)
+print("GAME CLASS:", type(game).__name__)
+print("PASS: Class reusability demonstrated")
+print("PASS: Serialization round trip verified")
+'@
+
+    $code | python -
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Class reusability demonstration failed."
+    }
+QUIZ ID: 1 | CLASS: Quiz | CORRECT ANSWER CHECK: PASS | ROUND TRIP: PASS
+QUIZ ID: 2 | CLASS: Quiz | CORRECT ANSWER CHECK: PASS | ROUND TRIP: PASS
+QUIZ ID: 3 | CLASS: Quiz | CORRECT ANSWER CHECK: PASS | ROUND TRIP: PASS
+QUIZ ID: 4 | CLASS: Quiz | CORRECT ANSWER CHECK: PASS | ROUND TRIP: PASS
+QUIZ ID: 5 | CLASS: Quiz | CORRECT ANSWER CHECK: PASS | ROUND TRIP: PASS
+QUIZ ID: 6 | CLASS: Quiz | CORRECT ANSWER CHECK: PASS | ROUND TRIP: PASS
+QUIZ ID: 7 | CLASS: Quiz | CORRECT ANSWER CHECK: PASS | ROUND TRIP: PASS
+QUIZ ID: 8 | CLASS: Quiz | CORRECT ANSWER CHECK: PASS | ROUND TRIP: PASS
+QUIZ ID: 9 | CLASS: Quiz | CORRECT ANSWER CHECK: PASS | ROUND TRIP: PASS
+QUIZ ID: 10 | CLASS: Quiz | CORRECT ANSWER CHECK: PASS | ROUND TRIP: PASS
+QUIZ ID: 11 | CLASS: Quiz | CORRECT ANSWER CHECK: PASS | ROUND TRIP: PASS
+QUIZ ID: 12 | CLASS: Quiz | CORRECT ANSWER CHECK: PASS | ROUND TRIP: PASS
+QUIZ ID: 13 | CLASS: Quiz | CORRECT ANSWER CHECK: PASS | ROUND TRIP: PASS
+QUIZ ID: 14 | CLASS: Quiz | CORRECT ANSWER CHECK: PASS | ROUND TRIP: PASS
+QUIZ ID: 15 | CLASS: Quiz | CORRECT ANSWER CHECK: PASS | ROUND TRIP: PASS
+QUIZ ID: 16 | CLASS: Quiz | CORRECT ANSWER CHECK: PASS | ROUND TRIP: PASS
+QUIZ ID: 17 | CLASS: Quiz | CORRECT ANSWER CHECK: PASS | ROUND TRIP: PASS
+QUIZ ID: 18 | CLASS: Quiz | CORRECT ANSWER CHECK: PASS | ROUND TRIP: PASS
+QUIZ ID: 19 | CLASS: Quiz | CORRECT ANSWER CHECK: PASS | ROUND TRIP: PASS
+QUIZ ID: 20 | CLASS: Quiz | CORRECT ANSWER CHECK: PASS | ROUND TRIP: PASS
+TOTAL QUIZ OBJECTS: 20
+SHARED CLASS: Quiz
+GAME CLASS: QuizGame
+PASS: Class reusability demonstrated
+PASS: Serialization round trip verified
+Failed: False
+
+03. Create Object Oriented Design Document
+
+> $document = @'
+# Object-Oriented Design and Class Reusability
+
+## 1. Purpose
+
+This document explains why the Quiz and QuizGame
+classes were selected for the Machine Tool and
+Vibration Analysis Quiz application.
+
+It addresses abstraction, encapsulation, reusability,
+composition, maintainability, and testability.
+
+## 2. Why Use Classes?
+
+A class defines a reusable structure containing
+related data and behavior.
+
+Without classes, question data, answer validation,
+game progress, and scoring could become scattered
+across unrelated variables and functions.
+
+Classes provide a consistent interface for managing
+these responsibilities.
+
+The application uses classes because multiple quiz
+objects share the same structure and behavior,
+while each object stores its own question data.
+
+## 3. Quiz Class
+
+Source: [quiz.py](../quiz.py)
+
+The Quiz class represents an individual question.
+
+Its data includes:
+
+- Question identifier
+- Question text
+- Four answer choices
+- Correct answer
+- Difficulty
+- Category
+- Hint
+- Explanation
+
+Its behavior includes:
+
+- Input and data validation
+- Correct answer checking
+- Hint retrieval
+- Explanation retrieval
+- Choice shuffling
+- Dictionary serialization
+- Object reconstruction from a dictionary
+
+A single Quiz class can represent questions about
+CNC machines, spindles, vibration, RMS, FFT,
+bearing frequencies, and other engineering topics.
+
+The question-specific data changes, but the shared
+validation and answer-checking behavior is reused.
+
+## 4. QuizGame Class
+
+Source: [quiz_game.py](../quiz_game.py)
+
+The QuizGame class manages the quiz collection
+and the state of an individual game.
+
+Its responsibilities include:
+
+- Quiz collection management
+- Duplicate question validation
+- Question selection
+- Randomized quiz sessions
+- Game progress management
+- Score calculation
+- Best score management
+
+QuizGame works with Quiz objects instead of
+duplicating individual question validation logic.
+
+The game logic is separated from the console
+interface so that game behavior can be tested
+without requiring manual keyboard input.
+
+## 5. QuizStorage Class
+
+Source: [storage.py](../storage.py)
+
+The QuizStorage class is responsible for
+persistent JSON data management.
+
+Its responsibilities include:
+
+- Loading saved state
+- Saving quiz data and scores
+- Validating stored data
+- Recovering from supported invalid state cases
+- Temporary-file-based state replacement
+
+Separating persistence from game logic makes it
+possible to test file handling independently.
+
+## 6. Abstraction
+
+Abstraction means providing a useful interface
+while hiding unnecessary implementation details.
+
+For example, Quiz.check_answer() allows callers
+to check an answer without implementing the
+answer comparison logic repeatedly.
+
+QuizGame.start_game() provides an interface for
+starting a quiz session without requiring the
+console interface to reproduce the internal
+question selection process.
+
+QuizStorage.load() and QuizStorage.save() provide
+interfaces for persistent state management.
+
+The console interface can use these operations
+without implementing JSON parsing itself.
+
+## 7. Encapsulation
+
+Encapsulation means organizing related data and
+behavior within a class.
+
+Quiz groups question data and answer validation.
+
+QuizGame groups quiz collections and game state
+with the operations that manage them.
+
+QuizStorage groups persistence behavior with
+the configuration of its storage path.
+
+This organization improves consistency and
+reduces the need for duplicated logic.
+
+Python does not automatically make every class
+attribute private. Encapsulation in this project
+primarily concerns responsibility separation and
+controlled operations rather than strict access
+restrictions on every attribute.
+
+## 8. Reusability
+
+Reusability means using the same implementation
+for multiple objects or application scenarios.
+
+The default question bank contains twenty
+different questions represented by the same
+Quiz class.
+
+Quiz.from_dict() reconstructs question objects
+from structured data.
+
+Quiz.to_dict() converts question objects back
+into a serializable representation.
+
+Quiz.check_answer() is reused for every question.
+
+For example, CNC and FFT questions have different
+text and answer choices, but both use the same
+answer-checking method.
+
+Adding a new engineering question does not require
+creating a new class or rewriting the scoring
+logic.
+
+The same Quiz class can also be reused for
+other subjects by supplying different data.
+
+## 9. Composition and Separation of Responsibilities
+
+Composition means constructing a larger system
+using smaller objects with distinct responsibilities.
+
+QuizGame manages a collection of Quiz objects.
+
+The console interface coordinates user input,
+game operations, and persistent storage.
+
+QuizStorage handles JSON persistence separately
+from question validation and game scoring.
+
+This design avoids placing all application logic
+inside a single large function or class.
+
+## 10. Maintainability and Testability
+
+The class structure supports independent tests
+for question validation, game logic, and storage.
+
+A change to console presentation does not
+necessarily require a change to answer validation.
+
+A change to storage implementation does not
+necessarily require a change to scoring rules.
+
+Tests can create independent Quiz and QuizGame
+objects without changing the user's saved state.
+
+Temporary storage paths can be used to test
+persistence without modifying the real state.json.
+
+This separation supports future maintenance
+and controlled feature expansion.
+
+## 11. Practical Reuse Example
+
+The following example creates independent question
+objects from the default question bank.
+
+    import json
+    from pathlib import Path
+    from quiz import Quiz
+    from quiz_game import QuizGame
+
+    data = json.loads(
+        Path("data/default_quizzes.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    quizzes = [
+        Quiz.from_dict(item)
+        for item in data
+    ]
+
+    game = QuizGame(quizzes)
+
+    for quiz in quizzes:
+        assert quiz.check_answer(quiz.answer)
+
+    assert len(game.list_quizzes()) == 20
+
+The same Quiz class is reused for all twenty
+questions.
+
+This example uses the existing application
+interfaces rather than a separate demonstration
+implementation.
+
+## 12. Why JSON Was Selected
+
+JSON is a human-readable, structured data format.
+
+It supports nested objects, arrays, strings,
+numbers, booleans, and null values.
+
+Python provides JSON support through its
+standard-library json module.
+
+UTF-8 encoding supports Korean question text
+and other international characters.
+
+JSON can be inspected with ordinary text editors
+and processed by standard tools and programming
+languages.
+
+These characteristics make JSON appropriate
+for a small, portable educational application.
+
+For very large datasets or concurrent writers,
+a database such as SQLite may provide more
+efficient indexed access and transactional
+updates.
+
+## 13. Git Commit Message Convention
+
+Meaningful commit messages describe the purpose
+of each development change.
+
+Recommended prefixes:
+
+| Prefix | Purpose |
+|---|---|
+| Feat | Add a new feature |
+| Fix | Correct a defect |
+| Docs | Update documentation |
+| Refactor | Improve internal code structure |
+| Test | Add or improve automated tests |
+
+Examples:
+
+- Feat: Implement interactive quiz console
+- Fix: Distinguish question and answer colors
+- Docs: Add Git collaboration workflow guide
+- Refactor: Simplify repeated validation logic
+- Test: Verify exception handling
+
+The Refactor example is illustrative and does
+not claim that this exact commit exists.
+
+Existing development history is preserved.
+
+## 14. NEITO Evaluation Mapping
+
+| Criterion | Evidence |
+|---|---|
+| 12 | Git commit message convention |
+| 13 | Class abstraction and reusability |
+| 14 | JSON readability and compatibility |
+
+Criterion 13 is addressed explicitly by the
+explanation of why Quiz and QuizGame are classes,
+their abstraction benefits, and practical
+examples of class reuse.
+
+Actual execution records will be linked from
+the consolidated evaluation evidence after
+revision verification.
+'@
+
+    $document = $document -replace "`r`n", "`n"
+    $document = $document -replace "`r", "`n"
+
+    $document = [regex]::Replace(
+        $document,
+        '(?m)[ \t]+$',
+        ''
+    )
+
+    $document = $document.TrimEnd(
+        [char[]]"`n"
+    ) + "`n"
+
+    [System.IO.File]::WriteAllText(
+        (Join-Path $root $target),
+        $document,
+        $utf8
+    )
+
+    "CREATED: $target"
+    "PASS: Object-oriented design documented"
+CREATED: docs/OBJECT_ORIENTED_DESIGN.md
+PASS: Object-oriented design documented
+Failed: False
+
+04. Verify Design Documentation
+
+> $code = @'
+import re
+
+from pathlib import Path
+
+path = Path(
+    "docs/OBJECT_ORIENTED_DESIGN.md"
+)
+
+text = path.read_text(
+    encoding="utf-8"
+)
+
+required = [
+    "Why Use Classes?",
+    "Quiz Class",
+    "QuizGame Class",
+    "QuizStorage Class",
+    "Abstraction",
+    "Encapsulation",
+    "Reusability",
+    "Composition",
+    "Maintainability",
+    "Practical Reuse Example",
+    "Why JSON Was Selected",
+    "Git Commit Message Convention",
+    "Refactor",
+    "UTF-8",
+    "Criterion 13",
+]
+
+for marker in required:
+
+    assert marker in text, marker
+    print("VERIFIED:", marker)
+
+sections = re.findall(
+    r"^## \d+\.",
+    text,
+    re.MULTILINE
+)
+
+assert len(sections) == 14
+
+links = re.findall(
+    r"\[[^\]]+\]\(([^)]+)\)",
+    text
+)
+
+for link in links:
+
+    assert (
+        path.parent / link
+    ).exists(), link
+
+    print("LINK VERIFIED:", link)
+
+raw = path.read_bytes()
+
+assert b"\r" not in raw
+assert not raw.startswith(b"\xef\xbb\xbf")
+
+assert not re.search(
+    r"[ \t]+$",
+    text,
+    re.MULTILINE
+)
+
+print("DOCUMENT SECTIONS:", len(sections))
+print("VERIFIED MARKERS:", len(required))
+print("LOCAL LINKS:", len(links))
+print("PASS: UTF-8 and LF verified")
+print("PASS: Design documentation verified")
+'@
+
+    $code | python -
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Design documentation validation failed."
+    }
+VERIFIED: Why Use Classes?
+VERIFIED: Quiz Class
+VERIFIED: QuizGame Class
+VERIFIED: QuizStorage Class
+VERIFIED: Abstraction
+VERIFIED: Encapsulation
+VERIFIED: Reusability
+VERIFIED: Composition
+VERIFIED: Maintainability
+VERIFIED: Practical Reuse Example
+VERIFIED: Why JSON Was Selected
+VERIFIED: Git Commit Message Convention
+VERIFIED: Refactor
+VERIFIED: UTF-8
+VERIFIED: Criterion 13
+LINK VERIFIED: ../quiz.py
+LINK VERIFIED: ../quiz_game.py
+LINK VERIFIED: ../storage.py
+DOCUMENT SECTIONS: 14
+VERIFIED MARKERS: 15
+LOCAL LINKS: 3
+PASS: UTF-8 and LF verified
+PASS: Design documentation verified
+Failed: False
+
+05. Verify Application Source Protection
+
+> git diff --exit-code HEAD -- `
+        main.py `
+        quiz.py `
+        quiz_game.py `
+        storage.py `
+        history.py `
+        console_ui.py `
+        data `
+        tests `
+        screenshots
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Application source changed."
+    }
+
+    if ($null -ne $stateBefore) {
+
+        if (-not (Test-Path "state.json")) {
+            throw "Original runtime state missing."
+        }
+
+        $after = (
+            Get-FileHash state.json -Algorithm SHA256
+        ).Hash
+
+        if ($after -ne $stateBefore) {
+            throw "Original runtime state changed."
+        }
+
+    } elseif (Test-Path "state.json") {
+
+        throw "Unexpected runtime state creation."
+    }
+
+    $status = @(git status --porcelain)
+
+    if ($LASTEXITCODE -ne 0 -or
+        $status.Count -ne 1 -or
+        $status[0] -ne "?? docs/OBJECT_ORIENTED_DESIGN.md") {
+
+        throw "Unexpected working tree changes."
+    }
+
+    "PASS: Application source unchanged"
+    "PASS: Existing tests unchanged"
+    "PASS: Original runtime state protected"
+    "PASS: Only approved design document created"
+    "PASS: R02 completed"
+    "NEXT: R03 permission error verification"
+PASS: Application source unchanged
+PASS: Existing tests unchanged
+PASS: Original runtime state protected
+PASS: Only approved design document created
+PASS: R02 completed
+NEXT: R03 permission error verification
+Failed: False
