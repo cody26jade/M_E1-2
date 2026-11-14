@@ -6,6 +6,7 @@ import os
 from datetime import datetime
 from pathlib import Path
 
+from history import get_history, validate_history
 from quiz import Quiz
 from quiz_game import QuizGame
 
@@ -83,10 +84,13 @@ class QuizStorage:
             else float(data["best_score"])
         )
 
+        game.play_history = validate_history(
+            data.get("history", [])
+        )
+
         return game
 
     def load_defaults(self):
-        """Create a game from the original question bank."""
 
         game = QuizGame()
 
@@ -94,10 +98,11 @@ class QuizStorage:
             self.default_path
         )
 
+        game.play_history = []
+
         return game
 
     def backup_corrupt_state(self):
-        """Preserve a damaged state file before recovery."""
 
         stamp = datetime.now().strftime(
             "%Y%m%d_%H%M%S_%f"
@@ -114,7 +119,6 @@ class QuizStorage:
         return backup
 
     def load(self):
-        """Load saved state or initialize the default bank."""
 
         self.last_warning = None
         self.last_backup = None
@@ -148,7 +152,7 @@ class QuizStorage:
 
             return self.decode_state(data)
 
-        except (ValueError, TypeError) as error:
+        except (ValueError, TypeError, KeyError) as error:
 
             game = self.load_defaults()
             backup = self.backup_corrupt_state()
@@ -163,7 +167,6 @@ class QuizStorage:
             return game
 
     def save(self, game):
-        """Save game state using an atomic file replacement."""
 
         if not isinstance(game, QuizGame):
             raise TypeError("QuizGame 객체가 필요합니다.")
@@ -182,6 +185,9 @@ class QuizStorage:
                 for quiz in game.list_quizzes()
             ],
             "best_score": game.best_score,
+            "history": validate_history(
+                get_history(game)
+            ),
         }
 
         self.decode_state(data)

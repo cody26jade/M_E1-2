@@ -2,13 +2,20 @@
 
 import sys
 
+from history import (
+    delete_question,
+    get_history,
+    history_summary,
+    record_game,
+)
+
 from quiz import Quiz
 from quiz_game import QuizGame
 from storage import QuizStorage
 
 
-LINE = "=" * 58
-SUBLINE = "-" * 58
+LINE = "=" * 66
+SUBLINE = "-" * 66
 
 LEVEL_NAMES = {
     "beginner": "초급",
@@ -17,7 +24,6 @@ LEVEL_NAMES = {
 
 
 def read_text(prompt):
-    """Read a non-empty string."""
 
     while True:
 
@@ -30,7 +36,6 @@ def read_text(prompt):
 
 
 def read_int(prompt, minimum, maximum):
-    """Read an integer within the allowed range."""
 
     while True:
 
@@ -53,7 +58,6 @@ def read_int(prompt, minimum, maximum):
 
 
 def save_state(game, storage):
-    """Save the current state and report failures."""
 
     if storage is None:
         return True
@@ -75,7 +79,6 @@ def save_state(game, storage):
 
 
 def show_menu(game):
-    """Display the main engineering dashboard."""
 
     quizzes = game.list_quizzes()
 
@@ -95,25 +98,27 @@ def show_menu(game):
 
     print()
     print(LINE)
-    print("       MACHINE TOOL & VIBRATION QUIZ")
-    print("       CODYSSEY AI ALL-IN-ONE | M_E1-2")
+    print("           MACHINE TOOL & VIBRATION QUIZ")
+    print("           CODYSSEY AI ALL-IN-ONE | M_E1-2")
     print(LINE)
 
     print(f" 등록 문제 : {len(quizzes)}개")
     print(f" 초급 / 중급 : {beginner} / {intermediate}")
     print(f" 최고 점수 : {best}")
+    print(f" 완료 게임 : {len(get_history(game))}회")
 
     print(SUBLINE)
     print(" [1] 퀴즈 풀기 (Play)")
     print(" [2] 문제 추가 (Add)")
     print(" [3] 문제 목록 (List)")
     print(" [4] 최고 점수 (Score)")
+    print(" [5] 문제 삭제 (Delete)")
+    print(" [6] 플레이 이력 (History)")
     print(" [0] 프로그램 종료 (Exit)")
     print(SUBLINE)
 
 
 def show_question(game):
-    """Display the current question and choices."""
 
     quiz = game.current_quiz
 
@@ -145,11 +150,10 @@ def show_question(game):
 
 
 def show_result(result):
-    """Display the completed game result."""
 
     print()
     print(LINE)
-    print("              GAME RESULT")
+    print("                   GAME RESULT")
     print(LINE)
 
     print(
@@ -196,7 +200,6 @@ def show_result(result):
 
 
 def play_quiz(game, storage=None):
-    """Run an interactive quiz session."""
 
     available = len(game.list_quizzes())
 
@@ -278,13 +281,16 @@ def play_quiz(game, storage=None):
 
             break
 
-    show_result(game.get_result())
+    result = game.get_result()
+
+    record_game(game, result)
+
+    show_result(result)
 
     save_state(game, storage)
 
 
 def add_question(game, storage=None):
-    """Read and register a new question."""
 
     print()
     print("===== ADD QUESTION =====")
@@ -363,13 +369,12 @@ def add_question(game, storage=None):
 
 
 def list_questions(game):
-    """Display all registered questions."""
 
     quizzes = game.list_quizzes()
 
     print()
     print(LINE)
-    print("              QUESTION LIST")
+    print("                   QUESTION LIST")
     print(LINE)
 
     if not quizzes:
@@ -391,11 +396,10 @@ def list_questions(game):
 
 
 def show_score(game):
-    """Display the best score."""
 
     print()
     print(LINE)
-    print("              BEST SCORE")
+    print("                   BEST SCORE")
     print(LINE)
 
     if game.best_score is None:
@@ -412,15 +416,152 @@ def show_score(game):
     print(LINE)
 
 
-def run_menu(game, storage=None):
-    """Run the main menu until the user exits."""
+def remove_question(game, storage=None):
 
-    actions = {
-        1: lambda: play_quiz(game, storage),
-        2: lambda: add_question(game, storage),
-        3: lambda: list_questions(game),
-        4: lambda: show_score(game),
+    quizzes = game.list_quizzes()
+
+    if not quizzes:
+
+        print("삭제할 문제가 없습니다.")
+
+        return game
+
+    list_questions(game)
+
+    valid_ids = {
+        quiz.id
+        for quiz in quizzes
     }
+
+    while True:
+
+        quiz_id = read_int(
+            "삭제할 문제 ID (0=취소): ",
+            0,
+            max(valid_ids),
+        )
+
+        if quiz_id == 0:
+
+            print("삭제를 취소했습니다.")
+
+            return game
+
+        if quiz_id in valid_ids:
+            break
+
+        print("존재하지 않는 문제 ID입니다.")
+
+    selected = next(
+        quiz
+        for quiz in quizzes
+        if quiz.id == quiz_id
+    )
+
+    print(f"삭제 대상: {selected.question}")
+
+    while True:
+
+        answer = input(
+            "정말 삭제하시겠습니까? (Y/N): "
+        ).strip().upper()
+
+        if answer == "N":
+
+            print("삭제를 취소했습니다.")
+
+            return game
+
+        if answer == "Y":
+            break
+
+        print("Y 또는 N을 입력하세요.")
+
+    replacement = delete_question(
+        game,
+        quiz_id,
+    )
+
+    if not save_state(replacement, storage):
+
+        print("저장 실패로 삭제를 취소합니다.")
+
+        return game
+
+    print(f"문제 삭제 완료! ID: {quiz_id}")
+
+    print(
+        f"전체 등록 문제: "
+        f"{len(replacement.list_quizzes())}개"
+    )
+
+    return replacement
+
+
+def show_history(game):
+
+    records = get_history(game)
+
+    summary = history_summary(game)
+
+    print()
+    print(LINE)
+    print("                   PLAY HISTORY")
+    print(LINE)
+
+    if not records:
+
+        print("아직 완료된 플레이 이력이 없습니다.")
+
+        return
+
+    print(f" 완료 게임 : {summary['count']}회")
+    print(f" 평균 점수 : {summary['average']:.1f}점")
+
+    if summary["best"] is not None:
+
+        print(f" 최고 점수 : {summary['best']:.1f}점")
+
+    print(SUBLINE)
+
+    print(
+        f"{'No.':>4} "
+        f"{'Date / Time':<19} "
+        f"{'N':>3} "
+        f"{'OK':>3} "
+        f"{'NG':>3} "
+        f"{'Hint':>4} "
+        f"{'Score':>6} "
+        f"{'Acc%':>6}"
+    )
+
+    print(SUBLINE)
+
+    for number, record in enumerate(
+        records,
+        start=1,
+    ):
+
+        stamp = (
+            record["played_at"][:19]
+            .replace("T", " ")
+        )
+
+        print(
+            f"{number:>4} "
+            f"{stamp:<19} "
+            f"{record['total_questions']:>3} "
+            f"{record['correct_count']:>3} "
+            f"{record['wrong_count']:>3} "
+            f"{record['hint_count']:>4} "
+            f"{record['score']:>6.1f} "
+            f"{record['accuracy']:>6.1f}"
+        )
+
+    print(LINE)
+
+
+def run_menu(game, storage=None):
 
     try:
 
@@ -429,9 +570,9 @@ def run_menu(game, storage=None):
             show_menu(game)
 
             choice = read_int(
-                "메뉴 선택 (0~4): ",
+                "메뉴 선택 (0~6): ",
                 0,
-                4,
+                6,
             )
 
             if choice == 0:
@@ -451,7 +592,32 @@ def run_menu(game, storage=None):
 
             try:
 
-                actions[choice]()
+                if choice == 1:
+
+                    play_quiz(game, storage)
+
+                elif choice == 2:
+
+                    add_question(game, storage)
+
+                elif choice == 3:
+
+                    list_questions(game)
+
+                elif choice == 4:
+
+                    show_score(game)
+
+                elif choice == 5:
+
+                    game = remove_question(
+                        game,
+                        storage,
+                    )
+
+                elif choice == 6:
+
+                    show_history(game)
 
             except (ValueError, RuntimeError) as error:
 
@@ -478,7 +644,6 @@ def run_menu(game, storage=None):
 
 
 def main():
-    """Load persistent state and launch the menu."""
 
     storage = QuizStorage()
 
