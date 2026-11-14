@@ -1,0 +1,189 @@
+CODYSSEY MISSION REPORT SYSTEM
+M_E1-2 STEP08B - Question Color Improvement
+Date: 2026-11-14 23:06:06
+
+01. Change Question Color to Purple
+
+> $path = Join-Path (Get-Location).Path "main.py"
+
+    $content = [System.IO.File]::ReadAllText($path)
+
+    $pattern = '(quiz\.question,\s*)"blue"'
+
+    $matches = [regex]::Matches(
+        $content,
+        $pattern
+    )
+
+    if ($matches.Count -ne 1) {
+        throw "Expected exactly one question color definition."
+    }
+
+    $updated = [regex]::Replace(
+        $content,
+        $pattern,
+        '${1}"purple"'
+    )
+
+    $utf8 = New-Object System.Text.UTF8Encoding($false)
+
+    [System.IO.File]::WriteAllText(
+        $path,
+        $updated,
+        $utf8
+    )
+
+    "BEFORE: Question = Blue"
+    "AFTER : Question = Purple"
+    "PASS: Question color updated"
+BEFORE: Question = Blue
+AFTER : Question = Purple
+PASS: Question color updated
+Failed: False
+
+02. Verify Source Code Changes
+
+> git diff -- main.py
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Git diff failed."
+    }
+
+    python -m py_compile main.py
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Python syntax verification failed."
+    }
+
+    "PASS: Source code verified"
+diff --git a/main.py b/main.py
+index c0bd18a..c78c0ea 100644
+--- a/main.py
++++ b/main.py
+@@ -208,7 +208,7 @@ def show_question(game):
+     print(
+         ui.paint(
+             quiz.question,
+-            "blue",
++            "purple",
+             True,
+         )
+     )
+PASS: Source code verified
+Failed: False
+
+03. Verify Question Color
+
+> $code = @'
+import io
+from contextlib import redirect_stdout
+from unittest.mock import patch
+
+from main import show_question
+from quiz_game import QuizGame
+
+game = QuizGame()
+game.load_default_quizzes()
+game.start_game(count=1)
+
+question = game.current_quiz.question
+
+output = io.StringIO()
+
+with redirect_stdout(output):
+    with patch(
+        "console_ui.color_enabled",
+        return_value=True,
+    ):
+        show_question(game)
+
+expected = "\033[95m\033[1m" + question
+
+assert expected in output.getvalue()
+
+print("QUESTION COLOR: PURPLE")
+print("ANSI CODE: 95")
+print("PASS: Question color verified")
+'@
+
+    $code | python -
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Question color verification failed."
+    }
+QUESTION COLOR: PURPLE
+ANSI CODE: 95
+PASS: Question color verified
+Failed: False
+
+04. Run All Unit Tests
+
+> python -m unittest discover -s tests 2>&1
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Unit tests failed."
+    }
+
+    "PASS: Existing functions preserved"
+python : ......................................................................................................................
+위치 줄:101 문자:5
++     python -m unittest discover -s tests 2>&1
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (.................................:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+----------------------------------------------------------------------
+Ran 118 tests in 0.170s
+
+OK
+PASS: Existing functions preserved
+Failed: False
+
+05. Commit Question Color Improvement
+
+> python -m unittest discover -s tests 2>&1
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Pre-commit tests failed."
+    }
+
+    $content = Get-Content main.py -Raw -Encoding UTF8
+
+    if ($content -notmatch 'quiz\.question,\s*"purple"') {
+        throw "Purple question color not found."
+    }
+
+    git add -- main.py
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Git add failed."
+    }
+
+    git commit -m "Fix: Distinguish question and answer colors"
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Git commit failed."
+    }
+
+    git log -3 --oneline
+
+    "PASS: Question color improvement committed"
+python : ......................................................................................................................
+위치 줄:112 문자:5
++     python -m unittest discover -s tests 2>&1
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (.................................:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+----------------------------------------------------------------------
+Ran 118 tests in 0.173s
+
+OK
+[main e1fcbcc] Fix: Distinguish question and answer colors
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+e1fcbcc Fix: Distinguish question and answer colors
+1533f93 Feat: Improve console colors and visual readability
+da5ff1c Feat: Complete bonus features and persistent play history
+PASS: Question color improvement committed
+Failed: False
+
